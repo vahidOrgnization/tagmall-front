@@ -68,6 +68,7 @@ function LoginContent({ isOpen, setIsOpen }) {
       <LoginUserRegisteration
         phoneNumber={phoneNumber}
         enteredOtp={enteredOtp}
+        handlePreviousStep={handlePreviousStep}
         onSuccess={close}
       />
     );

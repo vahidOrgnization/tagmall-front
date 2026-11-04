@@ -1,55 +1,49 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
+import { UserIcon, BarcodeReadIcon, MobilePhoneIcon, ArrowLeftIcon } from "@/icons";
 import { isValidIranianNationalCode } from "@/lib/client/validations";
 import { registerUser } from "@/lib/server/actions/auth";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import toast from "react-hot-toast";
 import { saveToken, saveUser } from "@/lib/server/cookies";
+import { formatPhoneNumber, toEnglishNumber } from "@/lib/client/utils";
 import usePublicStore from "@/app/store/publicStore";
-import Image from "next/image";
-import ResponsiveModal from "@/components/ui/responsive-modal";
 
-function LoginUserRegisteration({ phoneNumber, enteredOtp, onSuccess }) {
+function LoginUserRegisteration({
+  phoneNumber,
+  enteredOtp,
+  handlePreviousStep,
+  onSuccess,
+}) {
   const router = useRouter();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [fullName, setFullName] = useState("");
   const [nationalCode, setNationalCode] = useState("");
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [errors, setErrors] = useState({
-    firstName: "",
-    lastName: "",
+    fullName: "",
     nationalCode: "",
     mobile: "",
     otp: "",
   });
+
   const setUserInfo = usePublicStore((state) => state.setUserInfo);
   const setAccessToken = usePublicStore((state) => state.setAccessToken);
 
+  const parts = fullName.trim().split(/\s+/);
   const isFormValid =
-    firstName.trim() &&
-    lastName.trim() &&
-    isValidIranianNationalCode(nationalCode) &&
-    acceptedTerms;
-
-  const openTerms = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsTermsOpen(true);
-  };
-
-  const closeTerms = () => {
-    setIsTermsOpen(false);
-  };
+    fullName.trim().length >= 3 &&
+    nationalCode.length === 10 &&
+    isValidIranianNationalCode(nationalCode);
 
   const handleConfirm = async () => {
+    const nameParts = fullName.trim().split(/\s+/);
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(" ") || "";
+
     const newErrors = {
-      firstName: "",
-      lastName: "",
+      fullName: "",
       nationalCode: "",
       mobile: "",
       otp: "",
@@ -58,17 +52,15 @@ function LoginUserRegisteration({ phoneNumber, enteredOtp, onSuccess }) {
     let hasError = false;
 
     if (!firstName) {
-      newErrors.firstName = "لطفا نام را وارد نمایید";
+      newErrors.fullName = "لطفا نام و نام خانوادگی را وارد نمایید";
       hasError = true;
-    }
-
-    if (!lastName) {
-      newErrors.lastName = "لطفا نام خانوادگی را وارد نمایید";
+    } else if (!lastName) {
+      newErrors.fullName = "لطفا نام خانوادگی را نیز وارد نمایید";
       hasError = true;
     }
 
     if (!isValidIranianNationalCode(nationalCode)) {
-      newErrors.nationalCode = "کد ملی وارد شده نامعتبر است";
+      newErrors.nationalCode = "شناسه / کد ملی وارد شده نامعتبر است";
       hasError = true;
     }
 
@@ -90,8 +82,7 @@ function LoginUserRegisteration({ phoneNumber, enteredOtp, onSuccess }) {
     const { registerRes, registerErr } = await registerUser(payload);
 
     if (registerRes) {
-      console.log(registerRes);
-      toast.success("ورود با موفقیت انجام شد");
+      toast.success("ثبت‌نام با موفقیت انجام شد");
       setAccessToken(registerRes?.data?.token);
       setUserInfo(registerRes?.data?.user);
       await saveToken(registerRes?.data?.token);
@@ -102,33 +93,23 @@ function LoginUserRegisteration({ phoneNumber, enteredOtp, onSuccess }) {
       const apiErrors = registerErr?.response?.data?.errors;
 
       if (apiErrors) {
-        const fieldMap = {
-          name: "firstName",
-          family: "lastName",
-          national_code: "nationalCode",
-          mobile: "mobile",
-          otp: "otp",
-        };
         const mappedErrors = { ...newErrors };
-
-        Object.keys(apiErrors).forEach((key) => {
-          const stateKey = fieldMap[key];
-          if (stateKey) {
-            mappedErrors[stateKey] = apiErrors[key][0];
-          }
-        });
-
+        if (apiErrors.name || apiErrors.family) {
+          mappedErrors.fullName = apiErrors.name?.[0] || apiErrors.family?.[0];
+        }
+        if (apiErrors.national_code) {
+          mappedErrors.nationalCode = apiErrors.national_code[0];
+        }
         setErrors(mappedErrors);
 
         if (apiErrors.mobile) {
           toast.error(apiErrors.mobile[0]);
         }
-
         if (apiErrors.otp) {
           toast.error(apiErrors.otp[0]);
         }
       } else {
-        toast.error("خطا در برقراری ارتباط");
+        toast.error("خطا در برقراری ارتباط با سرور");
       }
     }
 
@@ -136,139 +117,136 @@ function LoginUserRegisteration({ phoneNumber, enteredOtp, onSuccess }) {
   };
 
   return (
-    <div className="h-full flex flex-col justify-between overflow-y-auto scroll-hidden mt-6 lg:mt-0">
-      <div>
-        {/* Slogan logo */}
-        <div className="relative w-[150px] h-[50px] lg:w-[330px] lg:h-[100px] mx-auto flex items-center justify-center">
-          <Image
-            src="/assets/images/logo/slogan-logo.svg"
-            fill
-            alt="لوگوی شعار"
-          />
+    <div className="flex flex-col space-y-6 select-none">
+      {/* 1. Header (Logo + Back Arrow button) */}
+      <div className="relative flex justify-center items-center w-full">
+        <Image
+          src="/assets/images/logo/tagmall-logo-horizontal.svg"
+          width={170}
+          height={66}
+          alt="تگ مال"
+          priority
+          className="h-16.5 w-auto object-contain"
+        />
+        {handlePreviousStep && (
+          <button
+            type="button"
+            onClick={handlePreviousStep}
+            className="absolute left-0 top-1/2 -translate-y-1/2 p-1 text-primary hover:text-primary-700 transition-colors cursor-pointer"
+            aria-label="بازگشت به مرحله قبل"
+          >
+            <ArrowLeftIcon size={24} className="text-primary" />
+          </button>
+        )}
+      </div>
+
+      {/* 2. Header (Title + Description) */}
+      <div className="flex flex-col gap-2 text-right">
+        <h2 className="text-h4 font-semibold text-primary">
+          ایجاد حساب کاربری
+        </h2>
+        <p className="text-small text-text-muted font-normal leading-relaxed">
+          اطلاعات خود را جهت ثبت‌نام وارد کنید.
+        </p>
+      </div>
+
+      {/* 3. Form (Full Name, National Code, Mobile) */}
+      <div className="flex flex-col gap-4">
+        {/* Full Name */}
+        <div className="flex flex-col gap-1">
+          <div
+            className={`w-full h-14 rounded-2xl border bg-surface flex items-center px-4 transition-all duration-200 ${
+              errors.fullName
+                ? "border-error focus-within:ring-2 focus-within:ring-error/20"
+                : "border-border-default focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10"
+            }`}
+          >
+            <UserIcon size={24} className="text-primary shrink-0" />
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                if (errors.fullName) {
+                  setErrors((prev) => ({ ...prev, fullName: "" }));
+                }
+              }}
+              disabled={isConfirming}
+              placeholder="نام و نام خانوادگی"
+              className="w-full h-full bg-transparent pr-3 pl-1 text-h5 font-medium text-text-primary placeholder:text-text-placeholder outline-none text-right"
+            />
+          </div>
+          {errors.fullName && (
+            <span className="text-caption text-error px-1 text-right">
+              {errors.fullName}
+            </span>
+          )}
         </div>
-        {/* Title */}
-        <h1 className="font-bold text-primary text-base mt-9 lg:mt-12">
-          ایجاد حساب کاربری:
-        </h1>
-        {/* Main content */}
-        <div className="bg-gray-200 rounded-lg overflow-hidden mt-4">
-          <div>
-            <Input
+
+        {/* National Code / شناسه ملی */}
+        <div className="flex flex-col gap-1">
+          <div
+            className={`w-full h-14 rounded-2xl border bg-surface flex items-center px-4 transition-all duration-200 ${
+              errors.nationalCode
+                ? "border-error focus-within:ring-2 focus-within:ring-error/20"
+                : "border-border-default focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10"
+            }`}
+          >
+            <BarcodeReadIcon size={24} className="text-primary shrink-0" />
+            <input
               type="text"
-              id="firstname"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              disabled={isConfirming}
-              placeholder="نام"
-              className={`text-center border-0! h-[50px] ${errors.firstName ? "" : "border-b-2!"} border-white rounded-none placeholder:text-gray-400`}
-            />
-            {errors.firstName && (
-              <div className="px-4 py-2 border-b-2 border-white">
-                <p className="text-xs text-center text-error-medium">
-                  {errors.firstName}
-                </p>
-              </div>
-            )}
-          </div>
-          <div>
-            <Input
-              type="text"
-              id="lastname"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              disabled={isConfirming}
-              placeholder="نام خانوادگی"
-              className={`text-center border-0! h-[50px] ${errors.lastName ? "" : "border-b-2!"} border-white rounded-none placeholder:text-gray-400`}
-            />
-            {errors.lastName && (
-              <div className="px-4 py-2 border-b-2 border-white">
-                <p className="text-xs text-center text-error-medium">
-                  {errors.lastName}
-                </p>
-              </div>
-            )}
-          </div>
-          <div>
-            <Input
-              id="nationalCode"
-              numeric
+              inputMode="numeric"
+              pattern="\d*"
               maxLength={10}
               value={nationalCode}
-              onChange={(e) => setNationalCode(e.target.value)}
+              onChange={(e) => {
+                const val = toEnglishNumber(e.target.value).replace(/\D/g, "");
+                if (val.length <= 10) setNationalCode(val);
+                if (errors.nationalCode) {
+                  setErrors((prev) => ({ ...prev, nationalCode: "" }));
+                }
+              }}
               disabled={isConfirming}
-              placeholder="کد ملی"
-              className="text-center border-0! h-[50px] placeholder:text-gray-400"
+              placeholder="شناسه ملی"
+              className="w-full h-full bg-transparent pr-3 pl-1 text-h5 font-medium text-text-primary placeholder:text-text-placeholder outline-none text-right"
             />
-            {errors.nationalCode && (
-              <div className="px-4 py-2">
-                <p className="text-xs text-center text-error-medium">
-                  {errors.nationalCode}
-                </p>
-              </div>
-            )}
+          </div>
+          {errors.nationalCode && (
+            <span className="text-caption text-error px-1 text-right">
+              {errors.nationalCode}
+            </span>
+          )}
+        </div>
+
+        {/* Mobile Number (Read-only / verified from step 1) */}
+        <div className="flex flex-col gap-1">
+          <div className="w-full h-14 rounded-2xl border border-border-default bg-surface/70 opacity-80 flex items-center px-4 cursor-not-allowed">
+            <MobilePhoneIcon size={24} className="text-primary shrink-0" />
+            <input
+              type="text"
+              value={phoneNumber ? formatPhoneNumber(phoneNumber) : ""}
+              readOnly
+              disabled
+              placeholder="شماره موبایل"
+              className="w-full h-full bg-transparent pr-3 pl-1 text-h5 font-medium text-text-muted outline-none text-right cursor-not-allowed"
+            />
           </div>
         </div>
-        {/* Checkbox */}
-        <div className="mt-4 mr-4">
-          <Checkbox
-            checked={acceptedTerms}
-            onChange={setAcceptedTerms}
-            className="bg-gray-200! border-0!"
-            label={
-              <>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={openTerms}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") openTerms(e);
-                  }}
-                  className="text-primary cursor-pointer"
-                >
-                  شرایط
-                </span>{" "}
-                بهره مندی از خدمات تگ مال را می پذیرم
-              </>
-            }
-          />
-        </div>
       </div>
+
+      {/* 4. Action Button (ثبت نام) */}
       <button
-        disabled={isConfirming || !isFormValid}
+        type="button"
         onClick={handleConfirm}
-        className={`font-bold font-iransans w-full mt-6 mb-2 border-2 py-2 rounded-full ${
-          isConfirming || !isFormValid
-            ? "text-gray-400 border-gray-400 cursor-not-allowed"
-            : "text-primary border-primary cursor-pointer"
+        disabled={isConfirming || !isFormValid}
+        className={`w-full h-12.5 rounded-2xl text-h5 font-semibold transition-all duration-200 flex items-center justify-center ${
+          !isConfirming && isFormValid
+            ? "bg-primary text-white hover:bg-primary-600 active:scale-[0.99] cursor-pointer shadow-sm"
+            : "bg-surface border border-border-default text-text-muted cursor-not-allowed opacity-80"
         }`}
       >
-        بهره مندی از خدمات ما :)
+        {isConfirming ? "در حال ثبت نام..." : "ثبت نام"}
       </button>
-
-      <ResponsiveModal
-        isOpen={isTermsOpen}
-        onClose={closeTerms}
-        title="شرایط و قوانین تگ مال"
-        nested
-        isHintBox
-      >
-        <div className="text-sm text-gray-600 leading-8 text-justify space-y-3">
-          <p>
-            استفاده از خدمات تگ مال به معنای پذیرش شرایط و قوانین زیر است. این
-            متن فعلاً برای تست نمایش داده می‌شود و نسخه نهایی قوانین به‌زودی
-            جایگزین آن خواهد شد.
-          </p>
-          <p>
-            کاربران موظف‌اند اطلاعات صحیح وارد کنند و از هرگونه سوءاستفاده از
-            سرویس خودداری نمایند. تگ مال حق به‌روزرسانی این شرایط را برای خود
-            محفوظ می‌دارد.
-          </p>
-          <p>
-            در صورت نیاز به پشتیبانی، می‌توانید از بخش پشتیبانی داخل اپلیکیشن با
-            ما در ارتباط باشید.
-          </p>
-        </div>
-      </ResponsiveModal>
     </div>
   );
 }
