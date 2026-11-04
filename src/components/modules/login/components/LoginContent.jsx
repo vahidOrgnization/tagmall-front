@@ -75,9 +75,11 @@ function LoginContent({ isOpen, setIsOpen }) {
 
   return isDesktop ? (
     <DialogWrapper
-      onBack={currentStep == 2 ? handlePreviousStep : null}
+      onBack={currentStep === 2 ? handlePreviousStep : null}
       isOpen={isOpen}
       onClose={close}
+      showCloseButton={false}
+      className="p-10 max-w-[460px] rounded-[28px] border-border-default shadow-modal lg:p-10 lg:max-w-[460px]"
     >
       {renderStep()}
     </DialogWrapper>

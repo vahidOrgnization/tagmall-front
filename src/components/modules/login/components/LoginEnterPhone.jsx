@@ -1,11 +1,10 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
-import { HintIcon } from "@/icons";
+import { useState } from "react";
+import Image from "next/image";
+import { MobilePhoneIcon } from "@/icons";
 import { isValidIranianMobile } from "@/lib/client/validations";
 import { sendOtp } from "@/lib/server/actions/auth";
-import Image from "next/image";
-import { useState } from "react";
 
 function LoginEnterPhone({
   handleNextStep,
@@ -44,58 +43,89 @@ function LoginEnterPhone({
     setIsLoading(false);
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && phoneNumber && !isLoading) {
+      e.preventDefault();
+      handleConfirm();
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full justify-between mt-6 lg:mt-0">
-      <div>
-        {/* Slogan logo */}
-        <div className="relative w-[150px] h-[50px] lg:w-[330px] lg:h-[100px] mx-auto flex items-center justify-center">
-          <Image
-            src="/assets/images/logo/slogan-logo.svg"
-            fill
-            alt="لوگوی شعار"
-          />
-        </div>
-        {/* Title */}
-        <div className="mt-9 lg:mt-12">
-          <h1 className="font-bold text-primary text-base">
-            ورود به حساب کاربری
-          </h1>
-        </div>
-        {/* Main content */}
-        <div className="mt-4">
-          <Input
-            placeholder="شماره تماس"
+    <div className="flex flex-col space-y-8 select-none">
+      {/* 1. Logo */}
+      <div className="flex justify-center items-center">
+        <Image
+          src="/assets/images/logo/tagmall-logo-horizontal.svg"
+          width={170}
+          height={66}
+          alt="تگ مال"
+          priority
+          className="h-16.5 w-auto object-contain"
+        />
+      </div>
+
+      {/* 2. Header (Title + Description) */}
+      <div className="flex flex-col gap-2 text-right">
+        <h2 className="text-h4 font-semibold text-primary">
+          ورود به حساب کاربری
+        </h2>
+        <p className="text-small text-text-muted font-normal leading-relaxed">
+          جهت ورود یا ثبت‌نام، شماره موبایل خود را وارد کنید.
+        </p>
+      </div>
+
+      {/* 3. Form Input */}
+      <div className="flex flex-col gap-1.5">
+        <div
+          className={`flex items-center gap-2 h-14 px-3 rounded-[15px] border bg-surface transition-colors ${
+            errors.phone
+              ? "border-error focus-within:border-error"
+              : "border-border-default focus-within:border-primary-400"
+          }`}
+        >
+          <input
             id="phone"
-            numeric
+            type="tel"
+            inputMode="numeric"
             maxLength={11}
             value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value.replace(/[^0-9]/g, "");
+              setPhoneNumber(val);
+              if (errors.phone) setErrors({ ...errors, phone: "" });
+            }}
+            onKeyDown={handleKeyDown}
             disabled={isLoading}
-            error={errors.phone}
-            className={`text-center text-gray-600 bg-gray-200 ${
-              errors.phone ? "" : "border-0!"
-            }`}
+            placeholder="شماره موبایل"
+            autoFocus
+            dir="rtl"
+            className="w-full bg-transparent text-body font-normal text-text-primary placeholder:text-text-disabled outline-none border-none focus:outline-none focus:ring-0"
           />
-          <div className="flex items-center gap-5 mt-4 mr-4">
-            <HintIcon size={20} />
-            <span className="font-bold text-sm text-gray-600">
-              کد تایید به شماره تماس شما پیامک می‌شود
-            </span>
-          </div>
+          <MobilePhoneIcon
+            size={24}
+            className="text-text-primary shrink-0 pointer-events-none"
+          />
         </div>
+
+        {errors.phone && (
+          <span className="text-caption text-error font-medium px-1">
+            {errors.phone}
+          </span>
+        )}
       </div>
-      {/* Submit button */}
+
+      {/* 4. Action Button */}
       <button
         type="button"
         onClick={handleConfirm}
         disabled={!phoneNumber || isLoading}
-        className={`mt-7 mb-2 w-full font-bold border-2 py-2 rounded-full ${
+        className={`w-full h-12.5 rounded-2xl text-h5 font-semibold transition-all duration-200 flex items-center justify-center cursor-pointer ${
           !phoneNumber || isLoading
-            ? "text-gray-400 border-gray-400 cursor-not-allowed"
-            : "text-primary border-primary cursor-pointer"
+            ? "bg-primary-300 text-text-on-primary cursor-not-allowed opacity-70"
+            : "bg-primary text-text-on-primary hover:bg-primary-600 active:scale-[0.99]"
         }`}
       >
-        ارسال پیامکی کد تایید
+        {isLoading ? "در حال ارسال..." : "ارسال پیامکی کد تایید"}
       </button>
     </div>
   );
