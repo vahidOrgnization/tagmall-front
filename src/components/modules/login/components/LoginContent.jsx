@@ -75,7 +75,6 @@ function LoginContent({ isOpen, setIsOpen }) {
 
   return isDesktop ? (
     <DialogWrapper
-      onBack={currentStep === 2 ? handlePreviousStep : null}
       isOpen={isOpen}
       onClose={close}
       showCloseButton={false}

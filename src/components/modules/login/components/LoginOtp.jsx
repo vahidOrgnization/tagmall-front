@@ -1,18 +1,18 @@
 "use client";
+
 import React, { useState, useEffect } from "react";
-import { EditIcon, HintIcon, StrokeArrowLeftIcon } from "@/icons";
+import Image from "next/image";
+import { MessageTextIcon, ArrowLeftIcon } from "@/icons";
 import toast from "react-hot-toast";
-import { formatPhoneNumber, formatTime } from "@/lib/client/utils";
+import { formatTime } from "@/lib/client/utils";
 import {
   checkAuthValidation,
   registerUser,
   sendOtp,
 } from "@/lib/server/actions/auth";
-import { useRouter } from "next/navigation";
 import usePublicStore from "@/app/store/publicStore";
 import { saveToken, saveUser } from "@/lib/server/cookies";
 import { OtpInput } from "@/components/ui/otp";
-import Image from "next/image";
 
 function LoginOtp({
   handleNextStep,
@@ -24,10 +24,11 @@ function LoginOtp({
   receivedOtp,
   onSuccess,
 }) {
+  const initialTime = otpExpireTime || 120;
   const [otp, setOtp] = useState("");
-  const [timeLeft, setTimeLeft] = useState(otpExpireTime);
-  const [isResendActive, setIsResendActive] = useState(false);
-  const [isLoading, setIsloading] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(initialTime);
+  const [isResendActive, setIsResendActive] = useState(initialTime <= 0);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   const setUserInfo = usePublicStore((state) => state.setUserInfo);
@@ -35,53 +36,54 @@ function LoginOtp({
   const setLoginOpen = usePublicStore((state) => state.setLoginOpen);
 
   useEffect(() => {
-    if (timeLeft <= 0) {
-      setIsResendActive(true);
-      return;
-    }
+    if (timeLeft <= 0) return;
     const timerId = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          setIsResendActive(true);
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
     return () => clearInterval(timerId);
   }, [timeLeft]);
 
   const handleResend = async () => {
-    setIsResendActive(true);
+    if (!isResendActive) return;
+    setError("");
     const { sendOtpRes, sendOtpErr } = await sendOtp({ mobile: phoneNumber });
     if (sendOtpRes) {
-      console.log(sendOtpRes);
-      setTimeLeft(sendOtpRes.data.expires_in_seconds);
-      setError("");
-    } else if (sendOtpErr) {
-      console.log(sendOtpErr);
-    }
-    if (isResendActive) {
+      const expires = sendOtpRes.data.expires_in_seconds || 120;
+      setTimeLeft(expires);
+      setIsResendActive(expires <= 0);
       toast.success("کد تایید مجدداً ارسال شد");
-      setTimeLeft(10);
-      setIsResendActive(false);
+    } else if (sendOtpErr) {
+      toast.error("خطا در ارسال مجدد کد تایید");
     }
   };
 
-  const handleCheckOtp = async () => {
-    setIsloading(true);
+  const handleCheckOtp = async (codeToVerify) => {
+    const code = codeToVerify || otp;
+    if (code.length !== 5 || isLoading) return;
+
+    setIsLoading(true);
     setError("");
 
     const { checkRes, checkErr } = await checkAuthValidation({
-      otp: otp,
+      otp: code,
       mobile: phoneNumber,
     });
 
     if (checkRes) {
-      console.log(checkRes);
-      if (checkRes.data.valid) {
+      if (checkRes.data?.valid) {
         if (!isNewUser) {
           const payload = {
             mobile: phoneNumber,
-            otp: otp,
+            otp: code,
           };
           const { registerRes, registerErr } = await registerUser(payload);
           if (registerRes) {
-            console.log("LOGIN: ", registerRes);
             setAccessToken(registerRes?.data?.token);
             setUserInfo(registerRes?.data?.user);
             await saveToken(registerRes?.data?.token);
@@ -90,11 +92,10 @@ function LoginOtp({
             if (onSuccess) onSuccess();
             setLoginOpen(false);
           } else if (registerErr) {
-            console.log(registerErr);
             toast.error("مشکلی در ورود به سامانه پیش آمده است");
           }
         } else {
-          setEnteredOtp(otp);
+          setEnteredOtp(code);
           handleNextStep();
         }
       } else {
@@ -102,78 +103,99 @@ function LoginOtp({
         setOtp("");
       }
     } else if (checkErr) {
-      console.log("ERROR: ", checkErr);
       setError("خطایی در ارتباط با سرور رخ داده است.");
     }
-    setIsloading(false);
+    setIsLoading(false);
   };
 
-  // Confirm OTP
-  useEffect(() => {
-    if (otp.length === 5) {
-      handleCheckOtp();
+  const handleOtpChange = (val) => {
+    setOtp(val);
+    if (error) setError("");
+    if (val.length === 5) {
+      handleCheckOtp(val);
     }
-  }, [otp]);
+  };
 
   return (
-    <div className="h-full flex flex-col justify-between mt-6 lg:mt-0">
-      <div>
-        {/* Slogan logo */}
-        <div className="relative w-[150px] h-[50px] lg:w-[330px] lg:h-[100px] mx-auto flex items-center justify-center">
-          <Image
-            src="/assets/images/logo/slogan-logo.svg"
-            fill
-            alt="لوگوی شعار"
-          />
-        </div>
-        {/* Title */}
-        <div className="flex items-center justify-between mt-9 lg:mt-12">
-          <h1 className="font-bold text-primary text-base">
-            ورود به حساب کاربری {`(${receivedOtp})`}
-          </h1>
-          <StrokeArrowLeftIcon
-            size={20}
+    <div className="flex flex-col space-y-8 select-none">
+      {/* 1. Header (Logo + Back Arrow button) */}
+      <div className="relative flex justify-center items-center w-full">
+        <Image
+          src="/assets/images/logo/tagmall-logo-horizontal.svg"
+          width={170}
+          height={66}
+          alt="تگ مال"
+          priority
+          className="h-16.5 w-auto object-contain"
+        />
+        {handlePreviousStep && (
+          <button
+            type="button"
             onClick={handlePreviousStep}
-            className="lg:hidden"
-          />
-        </div>
-        {/* Main content */}
-        <div className="mt-4">
-          <OtpInput
-            // label={`کد تایید (${receivedOtp})`}
-            value={otp}
-            setValue={setOtp}
-            error={error}
-            disabled={isLoading}
-          />
+            className="absolute left-0 top-1/2 -translate-y-1/2 p-1 text-primary hover:text-primary-700 transition-colors cursor-pointer"
+            aria-label="بازگشت به مرحله قبل"
+          >
+            <ArrowLeftIcon size={24} className="text-primary" />
+          </button>
+        )}
+      </div>
 
-          <div className="flex items-center gap-5 mt-4 mr-4">
-            <HintIcon size={20} />
-            <p className="text-gray-600">
-              کد تایید به شماره شما پیامک{" "}
-              {isResendActive ? "می‌شود" : "شده است"}
+      {/* 2. Header (Title + Description) */}
+      <div className="flex flex-col gap-2 text-right">
+        <h2 className="text-h4 font-semibold text-primary">
+          ورود به حساب کاربری {receivedOtp ? `(${receivedOtp})` : ""}
+        </h2>
+        <p className="text-small text-text-muted font-normal leading-relaxed">
+          کد ارسال شده به شماره خود را وارد نمایید.
+        </p>
+      </div>
+
+      {/* 3. Form (5-digit OTP + Helper message) */}
+      <div className="flex flex-col gap-3">
+        <OtpInput
+          variant="boxes"
+          value={otp}
+          setValue={handleOtpChange}
+          length={5}
+          error={error}
+          disabled={isLoading}
+        />
+
+        {error ? (
+          <span className="text-caption text-error font-medium text-right px-1">
+            {error}
+          </span>
+        ) : (
+          <div className="flex items-center justify-start gap-2 text-text-muted mt-1">
+            <MessageTextIcon size={20} className="text-text-muted shrink-0" />
+            <p className="text-small font-normal text-text-muted leading-relaxed">
+              کد تایید به شماره شما پیامک شده است.
             </p>
           </div>
-        </div>
+        )}
       </div>
-      {/* Resend code */}
+
+      {/* 4. Action Button (Timer / Resend) */}
       <button
+        type="button"
         onClick={handleResend}
-        disabled={!isResendActive}
-        className={`w-full mt-6 mb-2 rounded-full border-2 py-2 transition-all duration-300 font-bold ${
-          isResendActive
-            ? "text-primary border-primary cursor-pointer"
-            : "text-gray-400 border-gray-400 cursor-not-allowed"
+        disabled={!isResendActive || isLoading}
+        className={`w-full h-12.5 rounded-2xl text-h5 font-semibold transition-all duration-200 flex items-center justify-center ${
+          isResendActive && !isLoading
+            ? "border border-primary text-primary hover:bg-primary-50 cursor-pointer active:scale-[0.99]"
+            : "border border-border-default text-text-muted bg-surface cursor-not-allowed opacity-90"
         }`}
       >
         {isResendActive ? (
           "ارسال مجدد کد تایید"
         ) : (
-          <span dir="ltr">
-            ارسال مجدد کد تایید تا{" "}
-            <span className="text-error-medium">{formatTime(timeLeft)}</span>{" "}
-            دیگر
-          </span>
+          <div className="flex items-center gap-1.5" dir="rtl">
+            <span>ارسال مجدد کد تایید تا</span>
+            <span className="text-error font-semibold inline-block font-mono min-w-11 text-center">
+              {formatTime(timeLeft)}
+            </span>
+            <span>دیگر</span>
+          </div>
         )}
       </button>
     </div>
