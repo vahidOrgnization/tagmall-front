@@ -1,77 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { LoginEnterPhone, LoginOtp, LoginUserRegisteration } from "..";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import DialogWrapper from "@/components/ui/dialog";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
+import AuthCard from "./AuthCard";
 
 function LoginContent({ isOpen, setIsOpen }) {
   const isDesktop = useMediaQuery("(min-width: 1024px)");
-  const [currentStep, setCurrentStep] = useState(1);
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [enteredOtp, setEnteredOtp] = useState("");
-  const [otpExpireTime, setOtpExpireTime] = useState(0);
-  const [isNewUser, setIsNewUser] = useState(null);
-  const [receivedOtp, setReceivedOtp] = useState("");
-
-  const handleNextStep = () => {
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const handlePreviousStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
 
   const close = () => {
     setIsOpen(false);
-    setCurrentStep(1);
-    setPhoneNumber("");
-    setEnteredOtp("");
-    setReceivedOtp("");
-  };
-
-  const renderStep = () => {
-    if (currentStep === 1) {
-      return (
-        <LoginEnterPhone
-          handleNextStep={handleNextStep}
-          phoneNumber={phoneNumber}
-          setPhoneNumber={setPhoneNumber}
-          setOtpExpireTime={setOtpExpireTime}
-          setIsNewUser={setIsNewUser}
-          setReceivedOtp={setReceivedOtp}
-        />
-      );
-    }
-
-    if (currentStep === 2) {
-      return (
-        <LoginOtp
-          handleNextStep={handleNextStep}
-          handlePreviousStep={handlePreviousStep}
-          phoneNumber={phoneNumber}
-          setEnteredOtp={setEnteredOtp}
-          otpExpireTime={otpExpireTime}
-          isNewUser={isNewUser}
-          receivedOtp={receivedOtp}
-          onSuccess={close}
-        />
-      );
-    }
-
-    return (
-      <LoginUserRegisteration
-        phoneNumber={phoneNumber}
-        enteredOtp={enteredOtp}
-        handlePreviousStep={handlePreviousStep}
-        onSuccess={close}
-      />
-    );
   };
 
   return isDesktop ? (
@@ -81,7 +19,7 @@ function LoginContent({ isOpen, setIsOpen }) {
       showCloseButton={false}
       className="p-10 max-w-[460px] rounded-[28px] border-border-default shadow-modal lg:p-10 lg:max-w-[460px]"
     >
-      {renderStep()}
+      <AuthCard onSuccess={close} />
     </DialogWrapper>
   ) : (
     <Drawer open={isOpen} onOpenChange={close}>
@@ -89,7 +27,7 @@ function LoginContent({ isOpen, setIsOpen }) {
         className="z-100! h-[96%]! px-[10px]"
         overlayClassName="z-100"
       >
-        {renderStep()}
+        <AuthCard onSuccess={close} />
       </DrawerContent>
     </Drawer>
   );

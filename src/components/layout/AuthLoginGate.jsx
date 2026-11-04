@@ -17,6 +17,7 @@ function AuthLoginGate() {
   const setLoginOpen = usePublicStore((s) => s.setLoginOpen);
 
   useEffect(() => {
+    if (pathname === "/auth") return;
     if (searchParams.get("login") !== "1") return;
 
     setLoginOpen(true);
@@ -26,6 +27,8 @@ function AuthLoginGate() {
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [searchParams, pathname, router, setLoginOpen]);
+
+  if (pathname === "/auth") return null;
 
   return <LoginContent isOpen={isLoginOpen} setIsOpen={setLoginOpen} />;
 }
