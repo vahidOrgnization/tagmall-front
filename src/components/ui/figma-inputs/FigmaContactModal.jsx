@@ -22,6 +22,7 @@ export function FigmaContactModal({
   initialStage = "entry",
   initialValue = "",
   initialSeconds = 120,
+  className = "",
 }) {
   const [value, setValue] = useState(initialValue);
   const [stage, setStage] = useState(initialStage);
@@ -106,7 +107,7 @@ export function FigmaContactModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4"
+      className={`fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4 ${className}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

@@ -23,6 +23,7 @@ const initialAccounts = [
 /** Figma bank-account list and inline add state (177:4665). */
 export function FigmaBankDropdown({
   accounts: accountsProp,
+  defaultAccounts = initialAccounts,
   value,
   defaultValue = "melli",
   onChange,
@@ -32,9 +33,14 @@ export function FigmaBankDropdown({
   onAddError,
   state = "default",
   size = "large",
+  className,
+  triggerClassName = "",
+  valueClassName = "",
+  label,
+  id: triggerId,
 }) {
   const id = useId();
-  const [localAccounts, setLocalAccounts] = useState(initialAccounts);
+  const [localAccounts, setLocalAccounts] = useState(defaultAccounts);
   const [localValue, setLocalValue] = useState(defaultValue);
   const [open, setOpen] = useState(state === "selected" || state === "add");
   const [adding, setAdding] = useState(state === "add");
@@ -84,16 +90,18 @@ export function FigmaBankDropdown({
     }
   };
   return (
-    <div className={`${typography.root} flex w-[474px] flex-col gap-2`}>
+    <div className={`${typography.root} flex flex-col gap-2 ${className || "w-[474px]"}`}>
       <button
         type="button"
+        id={triggerId}
+        aria-label={label}
         aria-expanded={open}
         onClick={() => {
           setAdding(false);
           setOpen((current) => !current);
         }}
         dir="ltr"
-        className={`flex w-full items-center gap-2 border border-border-default bg-transparent ${sizeTokens.height} ${sizeTokens.radius} ${sizeTokens.padding}`}
+        className={`flex w-full items-center gap-2 border border-border-default bg-transparent ${sizeTokens.height} ${sizeTokens.radius} ${sizeTokens.padding} ${triggerClassName}`}
       >
         <Image
           src="/assets/figma-inputs/phone-field-chevron.svg"
@@ -102,7 +110,7 @@ export function FigmaBankDropdown({
           height={20}
           unoptimized
         />
-        <span dir="rtl" className={`flex-1 text-right text-text-primary ${sizeTokens.text}`}>
+        <span dir="auto" className={`min-w-0 flex-1 truncate text-right text-text-primary ${sizeTokens.text} ${valueClassName}`}>
           {selectedAccount?.label ?? "حساب بانکی را انتخاب کنید"}
         </span>
       </button>

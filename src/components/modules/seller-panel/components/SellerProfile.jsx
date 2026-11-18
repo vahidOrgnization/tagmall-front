@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { toEnglishNumber } from "@/lib/client/utils";
 import { extendTailwindMerge } from "tailwind-merge";
 import SellerFinancialReport from "./SellerFinancialReport";
 import SellerWallet from "./SellerWallet";
@@ -10,6 +11,8 @@ import useSellerProfileSection from "../hooks/useSellerProfileSection";
 import SellerHeader from "./SellerHeader";
 import {
   FigmaDropdown,
+  FigmaBankDropdown,
+  FigmaPhoneFieldContainer,
   FigmaRadio,
   FigmaTextInput,
 } from "@/components/ui/figma-inputs";
@@ -55,12 +58,12 @@ const PROFILE_SECTIONS = [
     title: "اطلاعات ارتباطی:",
     icon: SupportIcon,
     fields: [
-      { label: "شماره تماس", value: "۰۹۰۲۱۲۳۲۳۲۳", dropdown: true },
+      { label: "شماره تماس", value: "۰۹۰۲۱۲۳۲۳۲۳", contactType: "phone" },
       { label: "شماره تلفن ثابت", value: "۰۲۱۲۲۴۴۵۴", dropdown: true },
       {
         label: "پست الکترونیک شرکتی",
         value: "meymandiarman@gmail.com",
-        dropdown: true,
+        contactType: "email",
       },
       {
         label: "نشانی های اینترنتی ( ip )",
@@ -77,7 +80,7 @@ const PROFILE_SECTIONS = [
       { label: "نام بانک", value: "بانک ملی ایران", dropdown: true },
       { label: "شماره حساب بانکی", value: "۱۲۳۴۵۶۷۸۹۰" },
       { label: "شماره کارت", value: "۶۰۳۷۱۰۲۴۹۵۰۴۸۲۴" },
-      { label: "شماره شبا (IBAN)", value: "IR۹۵۰۱۷۰۰۰۰۰۰۰۳۴۰۵۶۲۰۹MDA" },
+      { label: "شماره شبا (IBAN)", value: "IR۹۵۰۱۷۰۰۰۰۰۰۰۳۴۰۵۶۲۰۹MDA", bankDropdown: true },
     ],
   },
 ];
@@ -137,11 +140,34 @@ function ProfileField({
   label,
   value,
   dropdown,
+  contactType,
+  bankDropdown,
   required = true,
   strong = false,
 }) {
   const [selectedValue, setSelectedValue] = useState(value);
   const fieldId = `seller-profile-${label}`;
+
+  if (contactType) {
+    return (
+      <FigmaPhoneFieldContainer
+        type={contactType}
+        label={label}
+        required={required}
+        size="medium"
+        className="w-full min-w-0"
+        triggerClassName="rounded-lg bg-surface-subtle px-3"
+        valueClassName="text-[14px] leading-[22px] text-text-disabled!"
+        modalClassName="theme-new"
+        onRequestCode={() => {
+          toast.error("ارسال کد تأیید در حال حاضر در دسترس نیست");
+          return false;
+        }}
+        defaultValue={value}
+        defaultOptions={[{ id: value, value }]}
+      />
+    );
+  }
 
   return (
     <div className="flex min-w-0 flex-col gap-2 text-small text-text-secondary">
@@ -149,8 +175,27 @@ function ProfileField({
         <label htmlFor={fieldId}>{label}</label>
         {required && <span className="text-error">*</span>}
       </span>
-      <span className="relative block">
-        {dropdown ? (
+      <div className="relative block">
+        {bankDropdown ? (
+          <FigmaBankDropdown
+            id={fieldId}
+            label={label}
+            size="medium"
+            className="w-full min-w-0"
+            triggerClassName="rounded-lg bg-surface-subtle px-3"
+            valueClassName="text-[14px] leading-[22px] text-text-disabled!"
+            defaultValue="current"
+            defaultAccounts={[{ id: "current", label: value }]}
+            onAddAccount={async (iban) => {
+              const normalized = toEnglishNumber(iban).replace(/[\s-]/g, "").toUpperCase();
+              if (!/^IR\d{24}$/.test(normalized)) {
+                toast.error("شماره شبا را به‌درستی وارد کنید");
+                return { success: false };
+              }
+              return { success: true, account: { id: normalized, label: normalized } };
+            }}
+          />
+        ) : dropdown ? (
           <FigmaDropdown
             id={fieldId}
             aria-label={label}
@@ -183,7 +228,7 @@ function ProfileField({
             inputClassName={`text-[14px] leading-[22px] text-right ${strong ? "text-text-primary!" : "text-text-disabled!"}`}
           />
         )}
-      </span>
+      </div>
     </div>
   );
 }

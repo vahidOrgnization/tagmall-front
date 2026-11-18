@@ -44,6 +44,7 @@ function FigmaContactFieldContainer({
   size = "large",
   value,
   defaultValue,
+  defaultOptions,
   phones: phonesProp,
   onChange,
   onAddPhone,
@@ -62,12 +63,15 @@ function FigmaContactFieldContainer({
   required = true,
   disabled = false,
   className,
+  triggerClassName,
+  valueClassName,
+  modalClassName,
 }) {
   const id = useId();
   const triggerRef = useRef(null);
   const isEmail = type === "email";
   const isAddress = type === "address";
-  const initialOptions = isEmail ? defaultEmails : isAddress ? defaultAddresses : defaultPhones;
+  const initialOptions = defaultOptions ?? (isEmail ? defaultEmails : isAddress ? defaultAddresses : defaultPhones);
   const [internalValue, setInternalValue] = useState(defaultValue ?? initialOptions[0].value);
   const [internalPhones, setInternalPhones] = useState(initialOptions);
   const [open, setOpen] = useState(state === "selected");
@@ -117,7 +121,7 @@ function FigmaContactFieldContainer({
       onKeyDown={(event) => {
         if (event.key === "Escape" && open) setOpen(false);
       }}
-      className={cn(typography.root, "flex w-[474px] flex-col gap-2", className)}
+      className={cn(typography.root, "flex flex-col gap-2", className || "w-[474px]")}
     >
       <div dir="ltr" className="flex h-[22px] w-full items-start justify-end gap-1">
         {required && (
@@ -155,6 +159,7 @@ function FigmaContactFieldContainer({
           sizeTokens.height,
           sizeTokens.radius,
           sizeTokens.padding,
+          triggerClassName,
         )}
       >
         <FigmaPhoneFieldIcon src={icons.chevron} />
@@ -164,6 +169,7 @@ function FigmaContactFieldContainer({
           className={cn(
             "min-w-0 flex-1 truncate text-right font-normal text-text-primary",
             sizeTokens.text,
+            valueClassName,
           )}
         >
           {selectedPhone?.value ?? selectedValue}
@@ -276,6 +282,7 @@ function FigmaContactFieldContainer({
         ) : (
           <FigmaContactModal
             returnFocusRef={triggerRef}
+            className={modalClassName}
             type={type}
             onClose={() => setAdding(false)}
             onRequestCode={onRequestCode}
