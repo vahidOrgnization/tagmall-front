@@ -493,3 +493,19 @@
     }
   }
 }
+
+.page:has(.card[data-feedback="true"]) {
+  height: auto;
+  min-height: 100dvh;
+  padding-block: 85px 110px;
+  overflow: visible;
+}
+
+.card[data-feedback="true"][data-seller-type] {
+  position: relative;
+  top: auto;
+  left: auto;
+  height: auto;
+  padding: 24px;
+  transform: none;
+}

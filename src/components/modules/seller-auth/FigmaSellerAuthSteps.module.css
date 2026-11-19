@@ -119,10 +119,6 @@
   line-height: 22px;
 }
 
-.header[data-variant="registration-legal"] .description {
-  color: #707070;
-}
-
 .otpForm {
   display: flex;
   width: 100%;
@@ -273,6 +269,9 @@
   flex: 0 0 auto;
   flex-direction: column;
   gap: 16px;
+  margin: 0;
+  border: 0;
+  padding: 0;
 }
 
 .fieldGroupTitle {
@@ -299,6 +298,7 @@
 }
 
 .registrationField {
+  position: relative;
   box-sizing: border-box;
   display: flex;
   width: 100%;
@@ -309,8 +309,12 @@
   direction: ltr;
   border: 1px solid #e5e7eb;
   border-radius: 15px;
-  padding: 12px;
+  padding: 11px;
   background: transparent;
+}
+
+.registrationField[data-invalid="true"] {
+  border-color: #ef4444;
 }
 
 .registrationField input {
@@ -346,6 +350,17 @@
 
 .mobileFieldIcon {
   height: 24.38095px;
+}
+
+.registrationError {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 1;
+  color: #ef4444;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
 }
 
 .individualFieldsAndSubmit,
@@ -476,4 +491,14 @@
   .registrationLegal {
     height: 709.899536px;
   }
+}
+
+.otpFields[data-length="6"] .otpBox {
+  width: min(60px, 15%);
+  min-width: 0;
+  flex-basis: min(60px, 15%);
+}
+
+.registrationStep fieldset {
+  min-width: 0;
 }

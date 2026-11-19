@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { SellerLogoutButton } from "@/components/modules/seller-auth/SellerSessionGate";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -85,7 +86,6 @@ const MENU_ITEMS = [
   {
     id: "logout",
     label: "خروج",
-    href: "/seller/logout",
     icon: SellerLogoutIcon,
     iconSize: 24,
   },
@@ -264,6 +264,14 @@ function SellerSidebar() {
         >
           {MENU_ITEMS.map((item) => {
             const Icon = item.icon;
+            if (item.id === "logout") {
+              return (
+                <SellerLogoutButton key={item.id} className="flex h-[50px] w-full items-center gap-3.5 rounded-md px-4 text-text-primary hover:bg-surface-subtle">
+                  <Icon size={item.iconSize} />
+                  {item.label}
+                </SellerLogoutButton>
+              );
+            }
             const isActive =
               item.href === "/seller"
                 ? pathname === "/seller"

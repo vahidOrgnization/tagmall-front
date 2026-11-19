@@ -9,18 +9,15 @@ import {
   FigmaAuthHeader,
   FigmaAuthPrimaryButton,
 } from "@/components/ui/figma-auth";
-import { FigmaSellerOtpStep, FigmaSellerRegistrationStep } from "./FigmaSellerAuthSteps";
-import { checkAuthValidation, registerUser, sendOtp } from "@/lib/server/actions/auth";
+import { FigmaSellerOtpStep, FigmaSellerRegistrationStep, SellerRequestWait } from "./FigmaSellerAuthSteps";
+import { startSellerOtp, resendSellerOtp, verifySellerOtp, registerSeller } from "@/lib/server/actions/seller-auth";
 import { isValidIranianMobile } from "@/lib/client/validations";
 import { toEnglishNumber } from "@/lib/client/utils";
-import {
-  getAuthErrorMessage,
-  getOtpExpirySeconds,
-  parseAuthBoolean,
-  persistAuthSession,
-} from "@/lib/client/auth";
-import usePublicStore from "@/app/store/publicStore";
 import styles from "./FigmaSellerLegalLoginPage.module.css";
+
+function normalizeDigits(value) {
+  return toEnglishNumber(value).replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit));
+}
 
 const legalTermsAlt =
   "با ورود و یا ثبت نام در تگ مال شما شرایط و قوانین استفاده از سرویس‌های سایت و قوانین حریم خصوصی آن را می‌پذیرید.";
@@ -61,7 +58,7 @@ function RebrandAnnouncement() {
   );
 }
 
-function SellerTypeTabs({ value, onChange }) {
+function SellerTypeTabs({ value, onChange, disabled }) {
   const sellerTypes = [
     { id: "legal", label: "فروشنده حقوقی", labelClassName: styles.legalTabLabel },
     { id: "individual", label: "فروشنده حقیقی", labelClassName: styles.individualTabLabel },
@@ -82,6 +79,7 @@ function SellerTypeTabs({ value, onChange }) {
           <button
             key={sellerType.id}
             aria-selected={selected}
+            disabled={disabled}
             className={`${styles.sellerTypeTab} ${
               selected ? styles.sellerTypeTabSelected : styles.sellerTypeTabIdle
             } ${sellerType.id === "legal" ? styles.legalTab : styles.individualTab}`}
@@ -151,190 +149,133 @@ function MobileSubmitButton({ label, disabled }) {
 
 export function FigmaSellerLegalLoginPage() {
   const router = useRouter();
-  const setUserInfo = usePublicStore((state) => state.setUserInfo);
-  const setAccessToken = usePublicStore((state) => state.setAccessToken);
   const [sellerType, setSellerType] = useState("legal");
   const [stage, setStage] = useState("credentials");
   const [companyNationalId, setCompanyNationalId] = useState("");
   const [phone, setPhone] = useState("");
-  const [isNewUser, setIsNewUser] = useState(false);
-  const [verifiedOtp, setVerifiedOtp] = useState("");
-  const [otpExpiresIn, setOtpExpiresIn] = useState(120);
+  const [challenge, setChallenge] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [retryUntil, setRetryUntil] = useState(0);
   const [otpResetKey, setOtpResetKey] = useState(0);
-  const [otpTimerResetKey, setOtpTimerResetKey] = useState(0);
+  const [otpError, setOtpError] = useState("");
+  const [error, setError] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
   const isLegalSeller = sellerType === "legal";
   const submitLabel = "ارسال پیامکی کد تایید";
 
+  function handleBackToCredentials() {
+    setStage("credentials");
+    setChallenge(null);
+    setPreview(null);
+    setOtpError("");
+    setError(null);
+  }
+
+  function acceptChallenge(data) {
+    setChallenge({ ...data, expiresAt: Date.now() + data.expires_in * 1000 });
+    setRetryUntil(Date.now() + data.resend_after * 1000);
+    setOtpResetKey((key) => key + 1);
+    setOtpError("");
+    setStage("otp");
+  }
+
+  async function runRequest(operation) {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      return await operation();
+    } catch {
+      toast.error("ارتباط برقرار نشد. دوباره تلاش کنید.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  function deviceId() {
+    try {
+      const key = "tagmall-seller-device";
+      const id = localStorage.getItem(key) || crypto.randomUUID();
+      localStorage.setItem(key, id);
+      return id;
+    } catch {
+      return undefined;
+    }
+  }
+
   function handleCredentialsSubmit(event) {
     event.preventDefault();
-    handleStartAuth();
-  }
-
-  async function handleStartAuth() {
-    if (isBusy) return;
-    const normalizedPhone = toEnglishNumber(phone).replace(/[^0-9]/g, "");
-    const normalizedCompanyId = toEnglishNumber(companyNationalId).replace(/[^0-9]/g, "");
-
-    if (isLegalSeller && !/^\d{11}$/.test(normalizedCompanyId)) {
-      toast.error("شناسه ملی شرکت باید ۱۱ رقم باشد.");
-      return;
+    if (Date.now() < retryUntil) return;
+    const mobile = phone.replace(/^(?:\+98|0098)(?=9)/, "0");
+    if (!isValidIranianMobile(mobile)) return toast.error("شماره موبایل معتبر نیست.");
+    if (isLegalSeller && !/^\d{11}$/.test(companyNationalId)) {
+      return toast.error("شناسهٔ ملی شرکت باید ۱۱ رقم باشد.");
     }
-    if (!isValidIranianMobile(normalizedPhone)) {
-      toast.error("شماره موبایل معتبر نیست.");
-      return;
-    }
-
-    setIsBusy(true);
-    try {
-      const { sendOtpRes, sendOtpErr } = await sendOtp({ mobile: normalizedPhone });
-      const responseData = sendOtpRes?.data;
-      const isNewUserValue = parseAuthBoolean(responseData?.is_new_user);
-      if (!responseData || isNewUserValue === null) {
-        toast.error(getAuthErrorMessage(sendOtpErr, "ارسال کد تأیید انجام نشد."));
-        return;
-      }
-
-      setPhone(normalizedPhone);
-      if (isLegalSeller) setCompanyNationalId(normalizedCompanyId);
-      setIsNewUser(isNewUserValue);
-      setOtpExpiresIn(getOtpExpirySeconds(responseData.expires_in_seconds));
-      setOtpResetKey((key) => key + 1);
-      setOtpTimerResetKey((key) => key + 1);
-      setStage("otp");
-    } catch (error) {
-      toast.error(getAuthErrorMessage(error, "ارسال کد تأیید انجام نشد."));
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function completeAuthentication(registerRes) {
-    try {
-      await persistAuthSession({
-        authData: registerRes?.data,
-        setAccessToken,
-        setUserInfo,
+    return runRequest(async () => {
+      setError(null);
+      const result = await startSellerOtp({
+        seller_type: isLegalSeller ? "LEGAL" : "INDIVIDUAL",
+        mobile,
+        company_national_id: companyNationalId,
+        deviceId: deviceId(),
       });
-    } catch (error) {
-      toast.error(getAuthErrorMessage(error, "ذخیره‌سازی اطلاعات ورود انجام نشد."));
-      return false;
-    }
-
-    toast.success("ورود با موفقیت انجام شد.");
-    router.push("/seller");
-    return true;
+      if (result.ok) acceptChallenge(result.data);
+      else {
+        setError(result);
+        if (result.retryAfter) setRetryUntil(Date.now() + result.retryAfter * 1000);
+      }
+    });
   }
 
-  async function handleVerifyOtp(otp) {
-    if (isBusy) return;
-    setIsBusy(true);
-    try {
-      const { checkRes, checkErr } = await checkAuthValidation({ otp, mobile: phone });
-      const isOtpValid = parseAuthBoolean(checkRes?.data?.valid);
-      if (!checkRes?.data || isOtpValid === null) {
-        toast.error(getAuthErrorMessage(checkErr, "بررسی کد تأیید انجام نشد."));
-        setOtpResetKey((key) => key + 1);
-        return;
-      }
-      if (!isOtpValid) {
-        toast.error("کد تأیید واردشده صحیح نیست.");
-        setOtpResetKey((key) => key + 1);
-        return;
-      }
-
-      setVerifiedOtp(otp);
-      if (isNewUser) {
-        setStage("register");
-        return;
-      }
-
-      const { registerRes, registerErr } = await registerUser({ mobile: phone, otp });
-      if (!registerRes) {
-        toast.error(getAuthErrorMessage(registerErr, "ورود به پنل فروشندگان انجام نشد."));
-        return;
-      }
-      await completeAuthentication(registerRes);
-    } catch (error) {
-      toast.error(getAuthErrorMessage(error, "بررسی کد تأیید انجام نشد."));
-      setOtpResetKey((key) => key + 1);
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function handleResendOtp() {
-    if (isBusy) return 0;
-    setIsBusy(true);
-    try {
-      const { sendOtpRes, sendOtpErr } = await sendOtp({ mobile: phone });
-      const responseData = sendOtpRes?.data;
-      if (!responseData) {
-        toast.error(getAuthErrorMessage(sendOtpErr, "ارسال مجدد کد انجام نشد."));
-        return 0;
-      }
-      const duration = getOtpExpirySeconds(responseData.expires_in_seconds);
-      setOtpExpiresIn(duration);
-      setOtpResetKey((key) => key + 1);
-      setOtpTimerResetKey((key) => key + 1);
-      toast.success("کد تأیید مجدداً ارسال شد.");
-      return duration;
-    } catch (error) {
-      toast.error(getAuthErrorMessage(error, "ارسال مجدد کد انجام نشد."));
-      return 0;
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function handleRegister(registration) {
-    if (isBusy) return;
-    const submittedPhone = toEnglishNumber(registration.mobile).replace(/[^0-9]/g, "");
-    if (submittedPhone !== phone) {
-      toast.error("برای تغییر شماره، به مرحله تأیید برگردید و کد تازه دریافت کنید.");
+  function handleOtpFailure(result) {
+    if ([410, 423].includes(result.status)) {
+      handleBackToCredentials();
+      setError(result);
       return;
     }
-
-    const fullName =
-      registration.sellerType === "legal" ? registration.managerName : registration.individualName;
-    const [name = "", ...familyParts] = fullName.trim().split(/\s+/).filter(Boolean);
-    const payload = {
-      mobile: phone,
-      otp: verifiedOtp,
-      name,
-      family: familyParts.join(" "),
-      national_code:
-        registration.sellerType === "legal"
-          ? registration.managerNationalId
-          : registration.nationalId,
-      seller_type: registration.sellerType,
-    };
-
-    if (registration.sellerType === "legal") {
-      payload.company_name = registration.companyName;
-      payload.company_national_code = registration.companyNationalId;
-      payload.manager_name = registration.managerName;
-      payload.manager_national_code = registration.managerNationalId;
-    }
-
-    setIsBusy(true);
-    try {
-      const { registerRes, registerErr } = await registerUser(payload);
-      if (!registerRes) {
-        toast.error(getAuthErrorMessage(registerErr, "ثبت‌نام فروشنده انجام نشد."));
-        return;
-      }
-      await completeAuthentication(registerRes);
-    } catch (error) {
-      toast.error(getAuthErrorMessage(error, "ثبت‌نام فروشنده انجام نشد."));
-    } finally {
-      setIsBusy(false);
-    }
+    if (result.retryAfter) setRetryUntil(Date.now() + result.retryAfter * 1000);
+    const attempts = Number.isInteger(result.attempts)
+      ? " تلاش باقی‌مانده: " + result.attempts.toLocaleString("fa-IR")
+      : "";
+    setOtpError((result.errors?.code?.[0] || result.message) + attempts);
+    setOtpResetKey((key) => key + 1);
   }
 
-  function handleBackToCredentials() {
-    if (isBusy) return;
-    setStage("credentials");
+  function handleVerifyOtp(code) {
+    if (!challenge) return;
+    if (Date.now() >= challenge.expiresAt) {
+      setOtpError("کد منقضی شده است. کد تازه بگیرید.");
+      return;
+    }
+    return runRequest(async () => {
+      const result = await verifySellerOtp({ challenge_id: challenge.challenge_id, code });
+      if (!result.ok) return handleOtpFailure(result);
+      if (result.data.status === "REGISTRATION_REQUIRED") {
+        setPreview(result.data.seller_preview);
+        setStage("register");
+      } else router.replace("/seller");
+    });
+  }
+
+  function handleResendOtp() {
+    if (!challenge || Date.now() < retryUntil) return;
+    return runRequest(async () => {
+      const result = await resendSellerOtp({
+        challenge_id: challenge.challenge_id,
+        deviceId: deviceId(),
+      });
+      if (result.ok) acceptChallenge(result.data);
+      else handleOtpFailure(result);
+    });
+  }
+
+  function handleRegister(fields) {
+    return runRequest(async () => {
+      setError(null);
+      const result = await registerSeller(preview?.seller_type === "LEGAL" ? "legal" : "individual", fields);
+      if (result.ok) return router.replace("/seller");
+      if (result.code === "REGISTRATION_TOKEN_INVALID") handleBackToCredentials();
+      setError(result);
+    });
   }
 
   return (
@@ -358,6 +299,7 @@ export function FigmaSellerLegalLoginPage() {
         }
         data-auth-stage={stage === "credentials" ? undefined : stage}
         data-seller-type={sellerType}
+        data-feedback={stage === "credentials" && Boolean(error) ? "true" : undefined}
       >
         {stage === "credentials" ? (
           <form className={styles.credentialsForm} onSubmit={handleCredentialsSubmit}>
@@ -383,7 +325,7 @@ export function FigmaSellerLegalLoginPage() {
                 />
               </div>
 
-              <SellerTypeTabs value={sellerType} onChange={setSellerType} />
+              <SellerTypeTabs disabled={isBusy} value={sellerType} onChange={(type) => { setSellerType(type); setError(null); }} />
             </div>
 
             <div
@@ -401,7 +343,7 @@ export function FigmaSellerLegalLoginPage() {
                   value={companyNationalId}
                   onChange={(event) =>
                     setCompanyNationalId(
-                      toEnglishNumber(event.target.value)
+                      normalizeDigits(event.target.value)
                         .replace(/[^0-9]/g, "")
                         .slice(0, 11),
                     )
@@ -416,19 +358,21 @@ export function FigmaSellerLegalLoginPage() {
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
-                maxLength={11}
+                maxLength={15}
                 value={phone}
                 onChange={(event) =>
                   setPhone(
-                    toEnglishNumber(event.target.value)
-                      .replace(/[^0-9]/g, "")
-                      .slice(0, 11),
+                    normalizeDigits(event.target.value)
+                      .replace(/[^+0-9]/g, "")
+                      .slice(0, 15),
                   )
                 }
                 hideIconOnMobile={isLegalSeller}
               />
             </div>
 
+            {error && <p role="alert">{error.errors?.mobile?.[0] || error.errors?.company_national_id?.[0] || error.message}</p>}
+            <SellerRequestWait until={retryUntil} />
             <div className={styles.submitArea}>
               <FigmaAuthPrimaryButton
                 label={submitLabel}
@@ -442,8 +386,10 @@ export function FigmaSellerLegalLoginPage() {
           </form>
         ) : stage === "otp" ? (
           <FigmaSellerOtpStep
-            initialSeconds={otpExpiresIn}
-            timerResetKey={otpTimerResetKey}
+            resendAt={retryUntil}
+            length={challenge.code_length}
+            maskedMobile={challenge.mobile_masked}
+            error={otpError}
             resetKey={otpResetKey}
             isBusy={isBusy}
             onBack={handleBackToCredentials}
@@ -452,10 +398,11 @@ export function FigmaSellerLegalLoginPage() {
           />
         ) : (
           <FigmaSellerRegistrationStep
-            key={`${sellerType}-${phone}-${companyNationalId}`}
-            sellerType={sellerType}
-            initialPhone={phone}
-            initialCompanyNationalId={companyNationalId}
+            sellerType={preview?.seller_type === "LEGAL" ? "legal" : "individual"}
+            initialCompanyNationalId={preview?.company_national_id || companyNationalId}
+            initialMobile={phone}
+            error={error}
+            onBack={handleBackToCredentials}
             isBusy={isBusy}
             onRegister={handleRegister}
           />

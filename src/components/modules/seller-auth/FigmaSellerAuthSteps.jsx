@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import toast from "react-hot-toast";
 import { isValidIranianMobile, isValidIranianNationalCode } from "@/lib/client/validations";
 import { toEnglishNumber } from "@/lib/client/utils";
 import styles from "./FigmaSellerAuthSteps.module.css";
@@ -10,11 +9,20 @@ import styles from "./FigmaSellerAuthSteps.module.css";
 const AUTH_LOGO = "/assets/figma-seller-auth/legal-seller-logo.svg";
 
 function toDigits(value) {
-  return toEnglishNumber(String(value ?? "")).replace(/[^0-9]/g, "");
+  return toEnglishNumber(String(value ?? ""))
+    .replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit))
+    .replace(/[^0-9]/g, "");
 }
 
 function toPersianDigits(value) {
   return String(value).replace(/[0-9]/g, (digit) => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]);
+}
+
+function normalizeIranianMobile(value) {
+  return toEnglishNumber(String(value ?? "").trim())
+    .replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit))
+    .replace(/^(?:\+98|0098)(?=9)/, "0")
+    .replace(/[^0-9]/g, "");
 }
 
 function SellerAuthHeader({ title, description, variant }) {
@@ -55,8 +63,8 @@ function SellerAuthHeader({ title, description, variant }) {
   );
 }
 
-function OtpFields({ disabled, error, onVerify }) {
-  const [code, setCode] = useState(["", "", "", "", ""]);
+function OtpFields({ length, disabled, error, onVerify }) {
+  const [code, setCode] = useState(() => Array(length).fill(""));
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRefs = useRef([]);
   const submittedCode = useRef("");
@@ -77,16 +85,16 @@ function OtpFields({ disabled, error, onVerify }) {
 
     const characters = [...code];
     digits
-      .slice(0, 5 - startIndex)
+      .slice(0, length - startIndex)
       .split("")
       .forEach((digit, offset) => {
         characters[startIndex + offset] = digit;
       });
     const nextCode = characters.join("");
     setCode(characters);
-    setActiveIndex(Math.min(startIndex + digits.length, 4));
+    setActiveIndex(Math.min(startIndex + digits.length, length - 1));
 
-    if (digits.length === 1 && startIndex < 4) {
+    if (digits.length === 1 && startIndex < length - 1) {
       inputRefs.current[startIndex + 1]?.focus();
     }
 
@@ -106,8 +114,8 @@ function OtpFields({ disabled, error, onVerify }) {
   }
 
   return (
-    <div className={styles.otpFields} dir="ltr" role="group" aria-label="کد تأیید پیامکی">
-      {Array.from({ length: 5 }, (_, index) => {
+    <div className={styles.otpFields} data-length={length} dir="ltr" role="group" aria-label="کد تأیید پیامکی">
+      {Array.from({ length }, (_, index) => {
         const selected = activeIndex === index;
         const boxClassName = [
           styles.otpBox,
@@ -129,7 +137,7 @@ function OtpFields({ disabled, error, onVerify }) {
             className={boxClassName}
             disabled={disabled}
             inputMode="numeric"
-            maxLength={1}
+            maxLength={index === 0 ? length : 1}
             onChange={(event) => handleChange(index, event)}
             onFocus={() => setActiveIndex(index)}
             onKeyDown={(event) => {
@@ -149,13 +157,14 @@ function OtpFields({ disabled, error, onVerify }) {
 }
 
 export function FigmaSellerOtpStep({
-  initialSeconds = 120,
+  resendAt,
+  maskedMobile,
+  length,
   isBusy = false,
   error = "",
   onBack,
   onResend,
   onVerify,
-  timerResetKey = 0,
   resetKey = 0,
 }) {
   return (
@@ -187,14 +196,14 @@ export function FigmaSellerOtpStep({
       />
 
       <div className={styles.otpForm} data-figma-node="240:2278">
-        <OtpFields key={resetKey} disabled={isBusy} error={Boolean(error)} onVerify={onVerify} />
+        <OtpFields key={resetKey} length={length} disabled={isBusy} error={Boolean(error)} onVerify={onVerify} />
         <div className={styles.otpHelperRow} dir="ltr">
           <p
             className={error ? styles.otpHelperError : styles.otpHelper}
             dir="rtl"
             aria-live="polite"
           >
-            {error || "کد تایید به شماره شما پیامک می‌شود"}
+            {error || (maskedMobile ? "کد به شمارهٔ " + maskedMobile + " ارسال شد." : "کد تأیید پیامک شد.")}
           </p>
           <Image
             src="/assets/figma-auth/message-text.svg"
@@ -209,8 +218,8 @@ export function FigmaSellerOtpStep({
       </div>
 
       <OtpTimerControl
-        key={timerResetKey}
-        initialSeconds={initialSeconds}
+        key={resendAt}
+        until={resendAt}
         isBusy={isBusy}
         onResend={onResend}
       />
@@ -218,20 +227,28 @@ export function FigmaSellerOtpStep({
   );
 }
 
-function OtpTimerControl({ initialSeconds, isBusy, onResend }) {
-  const [secondsLeft, setSecondsLeft] = useState(Math.max(0, initialSeconds));
-
+function useSecondsLeft(until) {
+  const remaining = () => Math.max(0, Math.ceil((until - Date.now()) / 1000));
+  const [seconds, setSeconds] = useState(remaining);
   useEffect(() => {
-    if (secondsLeft <= 0) return undefined;
-    const timer = window.setTimeout(() => {
-      setSecondsLeft((seconds) => Math.max(0, seconds - 1));
-    }, 1000);
+    if (!until || seconds <= 0) return;
+    const timer = window.setTimeout(() => setSeconds(remaining()), 1000);
     return () => window.clearTimeout(timer);
-  }, [secondsLeft]);
+  });
+  return seconds;
+}
 
-  async function handleResend() {
-    await onResend();
-  }
+export function SellerRequestWait({ until }) {
+  return <RequestWait key={until} until={until} />;
+}
+
+function RequestWait({ until }) {
+  const seconds = useSecondsLeft(until);
+  return seconds > 0 ? <p role="status">تا درخواست بعدی {toPersianDigits(seconds)} ثانیه صبر کنید.</p> : null;
+}
+
+function OtpTimerControl({ until, isBusy, onResend }) {
+  const secondsLeft = useSecondsLeft(until);
 
   const minutes = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
   const seconds = String(secondsLeft % 60).padStart(2, "0");
@@ -244,251 +261,126 @@ function OtpTimerControl({ initialSeconds, isBusy, onResend }) {
       </span>
     </button>
   ) : (
-    <button type="button" className={styles.resendButton} onClick={handleResend} disabled={isBusy}>
+    <button type="button" className={styles.resendButton} onClick={onResend} disabled={isBusy}>
       ارسال مجدد کد تایید
     </button>
   );
 }
 
-function RegistrationField({
-  ariaLabel,
-  autoComplete,
-  icon,
-  iconHeight = 24,
-  inputMode,
-  maxLength,
-  onChange,
-  placeholder,
-  disabled = false,
-  type = "text",
-  value,
-}) {
-  return (
-    <label className={styles.registrationField}>
-      <input
-        aria-label={ariaLabel}
-        autoComplete={autoComplete}
-        disabled={disabled}
-        dir="rtl"
-        inputMode={inputMode}
-        maxLength={maxLength}
-        onChange={onChange}
-        placeholder={placeholder}
-        type={type}
-        value={value}
-      />
-      <Image
-        src={icon}
-        alt=""
-        aria-hidden
-        width={24}
-        height={24}
-        unoptimized
-        className={iconHeight === 24 ? styles.fieldIcon : styles.mobileFieldIcon}
-      />
-    </label>
-  );
-}
+const individualFields = [
+  ["name", "نام و نام خانوادگی مالک کسب و کار", "text", "user.svg", "name"],
+  ["national_code", "کد ملی مالک کسب و کار", "text", "barcode-read.svg", "off"],
+  ["mobile", "شماره موبایل", "tel", "mobile.svg", "tel"],
+];
 
-function FieldGroup({ children, title, dataNode }) {
-  return (
-    <section className={styles.fieldGroup} data-figma-node={dataNode}>
-      {title && <h2 className={styles.fieldGroupTitle}>{title}</h2>}
-      <div className={styles.fieldGroupInputs}>{children}</div>
-    </section>
-  );
-}
+const legalCompanyFields = [
+  ["company_name", "نام شرکت", "text", "user.svg", "organization"],
+  ["company_national_id", "شناسه ملی شرکت", "text", "barcode-read.svg", "off"],
+];
+
+const legalManagerFields = [
+  ["ceo_full_name", "نام و نام خانوادگی مدیر عامل", "text", "user.svg", "name"],
+  ["ceo_national_code", "کد ملی مدیر عامل", "text", "barcode-read.svg", "off"],
+  ["mobile", "شماره موبایل", "tel", "mobile.svg", "tel"],
+];
+
+const errorFields = {
+  NATIONAL_CODE_EXISTS: "national_code",
+  EMAIL_EXISTS: "email",
+  COMPANY_NATIONAL_ID_EXISTS: "company_national_id",
+  MOBILE_COMPANY_MISMATCH: "company_national_id",
+};
 
 export function FigmaSellerRegistrationStep({
-  sellerType,
-  initialPhone = "",
-  initialCompanyNationalId = "",
-  isBusy = false,
-  onRegister,
+  sellerType, initialCompanyNationalId, initialMobile, isBusy, error, onBack, onRegister,
 }) {
-  const [phone, setPhone] = useState(toDigits(initialPhone).slice(0, 11));
-  const [individualName, setIndividualName] = useState("");
-  const [individualNationalId, setIndividualNationalId] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [companyNationalId, setCompanyNationalId] = useState(
-    toDigits(initialCompanyNationalId).slice(0, 11),
-  );
-  const [managerName, setManagerName] = useState("");
-  const [managerNationalId, setManagerNationalId] = useState("");
-  const isLegalSeller = sellerType === "legal";
+  const isLegal = sellerType === "legal";
+  const [localErrors, setLocalErrors] = useState({});
+  const fields = isLegal
+    ? [...legalCompanyFields, ...legalManagerFields]
+    : individualFields;
 
   function handleSubmit(event) {
     event.preventDefault();
-
-    if (!isValidIranianMobile(phone)) {
-      toast.error("شماره موبایل معتبر نیست.");
-      return;
+    const data = new FormData(event.currentTarget);
+    const payload = Object.fromEntries(fields.map(([name]) => [
+      name,
+      name === "national_code" || name === "ceo_national_code" || name === "company_national_id"
+        ? toDigits(data.get(name))
+        : name === "mobile"
+          ? normalizeIranianMobile(data.get(name))
+          : String(data.get(name) ?? "").trim(),
+    ]));
+    const errors = {};
+    const nationalCodeField = isLegal ? "ceo_national_code" : "national_code";
+    if (!isValidIranianNationalCode(payload[nationalCodeField])) errors[nationalCodeField] = "کد ملی معتبر نیست.";
+    if (!isValidIranianMobile(payload.mobile)) errors.mobile = "شماره موبایل معتبر نیست.";
+    if (isLegal) {
+      if (payload.company_national_id.length !== 11) errors.company_national_id = "شناسهٔ ملی شرکت باید ۱۱ رقم باشد.";
     }
-
-    if (isLegalSeller) {
-      if (!companyName.trim()) {
-        toast.error("نام شرکت را وارد کنید.");
-        return;
-      }
-      if (!/^\d{11}$/.test(companyNationalId)) {
-        toast.error("شناسه ملی شرکت باید ۱۱ رقم باشد.");
-        return;
-      }
-      if (managerName.trim().split(/\s+/).length < 2) {
-        toast.error("نام و نام خانوادگی مدیر عامل را وارد کنید.");
-        return;
-      }
-      if (!isValidIranianNationalCode(managerNationalId)) {
-        toast.error("کد ملی مدیر عامل معتبر نیست.");
-        return;
-      }
-      onRegister({
-        sellerType,
-        mobile: toDigits(phone),
-        companyName: companyName.trim(),
-        companyNationalId,
-        managerName: managerName.trim(),
-        managerNationalId: toDigits(managerNationalId),
-      });
-      return;
-    }
-
-    if (individualName.trim().split(/\s+/).length < 2) {
-      toast.error("نام و نام خانوادگی مالک کسب و کار را وارد کنید.");
-      return;
-    }
-    if (!isValidIranianNationalCode(individualNationalId)) {
-      toast.error("کد ملی مالک کسب و کار معتبر نیست.");
-      return;
-    }
-
-    onRegister({
-      sellerType,
-      mobile: toDigits(phone),
-      individualName: individualName.trim(),
-      nationalId: toDigits(individualNationalId),
-    });
+    setLocalErrors(errors);
+    if (!Object.keys(errors).length) onRegister(payload);
   }
 
   return (
-    <form
-      className={`${styles.registrationStep} ${isLegalSeller ? styles.registrationLegal : styles.registrationIndividual}`}
-      data-figma-node={isLegalSeller ? "240:2422" : "240:2363"}
-      onSubmit={handleSubmit}
-    >
-      <SellerAuthHeader
-        variant={isLegalSeller ? "registration-legal" : "registration-individual"}
-        title={isLegalSeller ? "ثبت نام فروشنده حقوقی" : "ثبت نام فروشنده حقیقی"}
-        description={
-          isLegalSeller
-            ? "اطلاعات شرکت و مدیر عامل را برای ساخت حساب وارد کنید."
-            : "مالک کسب و کار محترم لطفا اطلاعات هویتی خود را ثبت کنید"
-        }
-      />
-
-      {isLegalSeller ? (
+    <form className={styles.registrationStep} onSubmit={handleSubmit}>
+      <SellerAuthHeader variant={isLegal ? "registration-legal" : "registration-individual"}
+        title={isLegal ? "ثبت نام فروشنده حقوقی" : "ثبت نام فروشنده حقیقی"}
+        description={isLegal
+          ? "اطلاعات شرکت و مدیر عامل را برای ساخت حساب وارد کنید."
+          : "مالک کسب و کار محترم لطفا اطلاعات هویتی خود را ثبت کنید"} />
+      {isLegal ? (
         <>
-          <FieldGroup title="اطلاعات هویتی شرکت" dataNode="240:2454">
-            <RegistrationField
-              ariaLabel="نام شرکت"
-              disabled={isBusy}
-              icon="/assets/figma-auth/user.svg"
-              onChange={(event) => setCompanyName(event.target.value)}
-              placeholder="نام شرکت"
-              value={companyName}
-            />
-            <RegistrationField
-              ariaLabel="شناسه ملی شرکت"
-              disabled={isBusy}
-              icon="/assets/figma-auth/barcode-read.svg"
-              inputMode="numeric"
-              maxLength={11}
-              onChange={(event) => setCompanyNationalId(toDigits(event.target.value).slice(0, 11))}
-              placeholder="شناسه ملی شرکت"
-              value={companyNationalId}
-            />
-          </FieldGroup>
-
-          <div className={styles.legalManagerAndSubmit} data-figma-node="240:2463">
-            <FieldGroup title="اطلاعات هویتی مدیر عامل" dataNode="240:2463">
-              <RegistrationField
-                ariaLabel="نام و نام خانوادگی مدیر عامل"
-                disabled={isBusy}
-                icon="/assets/figma-auth/user.svg"
-                onChange={(event) => setManagerName(event.target.value)}
-                placeholder="نام و نام خانوادگی مدیر عامل"
-                value={managerName}
-              />
-              <RegistrationField
-                ariaLabel="کد ملی مدیر عامل"
-                disabled={isBusy}
-                icon="/assets/figma-auth/barcode-read.svg"
-                inputMode="numeric"
-                maxLength={10}
-                onChange={(event) =>
-                  setManagerNationalId(toDigits(event.target.value).slice(0, 10))
-                }
-                placeholder="کد ملی مدیر عامل"
-                value={managerNationalId}
-              />
-              <RegistrationField
-                ariaLabel="شماره موبایل"
-                disabled={isBusy}
-                autoComplete="tel"
-                icon="/assets/figma-auth/mobile.svg"
-                iconHeight={24.38095}
-                inputMode="tel"
-                maxLength={11}
-                onChange={(event) => setPhone(toDigits(event.target.value).slice(0, 11))}
-                placeholder="شماره موبایل"
-                type="tel"
-                value={phone}
-              />
-            </FieldGroup>
+          <RegistrationFieldGroup title="اطلاعات هویتی شرکت" fields={legalCompanyFields}
+            initialCompanyNationalId={initialCompanyNationalId} localErrors={localErrors} error={error}
+            isBusy={isBusy} />
+          <div className={styles.legalManagerAndSubmit}>
+            <RegistrationFieldGroup title="اطلاعات هویتی مدیر عامل" fields={legalManagerFields}
+              initialMobile={initialMobile} localErrors={localErrors} error={error} isBusy={isBusy} />
             <RegistrationSubmitButton disabled={isBusy} />
           </div>
         </>
       ) : (
-        <div className={styles.individualFieldsAndSubmit} data-figma-node="240:2395">
-          <div className={styles.individualFields}>
-            <RegistrationField
-              ariaLabel="نام و نام خانوادگی مالک کسب و کار"
-              disabled={isBusy}
-              icon="/assets/figma-auth/user.svg"
-              onChange={(event) => setIndividualName(event.target.value)}
-              placeholder="نام و نام خانوادگی مالک کسب و کار"
-              value={individualName}
-            />
-            <RegistrationField
-              ariaLabel="کد ملی مالک کسب و کار"
-              disabled={isBusy}
-              icon="/assets/figma-auth/barcode-read.svg"
-              inputMode="numeric"
-              maxLength={10}
-              onChange={(event) =>
-                setIndividualNationalId(toDigits(event.target.value).slice(0, 10))
-              }
-              placeholder="کد ملی مالک کسب و کار"
-              value={individualNationalId}
-            />
-            <RegistrationField
-              ariaLabel="شماره موبایل"
-              disabled={isBusy}
-              autoComplete="tel"
-              icon="/assets/figma-auth/mobile.svg"
-              iconHeight={24.38095}
-              inputMode="tel"
-              maxLength={11}
-              onChange={(event) => setPhone(toDigits(event.target.value).slice(0, 11))}
-              placeholder="شماره موبایل"
-              type="tel"
-              value={phone}
-            />
-          </div>
+        <div className={styles.individualFieldsAndSubmit}>
+          <RegistrationFieldGroup fields={individualFields} initialMobile={initialMobile}
+            localErrors={localErrors} error={error} isBusy={isBusy} individual />
           <RegistrationSubmitButton disabled={isBusy} />
         </div>
       )}
+      {error && !error.errors && !errorFields[error.code] && <p role="alert">{error.message}</p>}
+      <button type="button" className="sr-only" disabled={isBusy} onClick={onBack}>
+        بازگشت و دریافت کد تازه
+      </button>
     </form>
+  );
+}
+
+function RegistrationFieldGroup({
+  title, fields, initialCompanyNationalId, initialMobile, localErrors, error, isBusy,
+  individual = false,
+}) {
+  return (
+    <fieldset disabled={isBusy} className={`${styles.fieldGroup} ${individual ? styles.individualFields : ""}`}>
+      {title && <p className={styles.fieldGroupTitle}>{title}</p>}
+      <div className={styles.fieldGroupInputs}>
+        {fields.map(([name, placeholder, type, icon, autoComplete]) => {
+          const message = localErrors[name] || error?.errors?.[name]?.[0] ||
+            (errorFields[error?.code] === name ? error.message : "");
+          return (
+            <label key={name} className={styles.registrationField} data-invalid={Boolean(message)}>
+              <input name={name} type={type} autoComplete={autoComplete} aria-label={placeholder}
+                aria-invalid={Boolean(message)} inputMode={name.includes("national_code") || name === "company_national_id" ? "numeric" : undefined}
+                defaultValue={name === "company_national_id" ? initialCompanyNationalId : name === "mobile" ? normalizeIranianMobile(initialMobile) : undefined}
+                placeholder={placeholder} maxLength={{ national_code: 10, ceo_national_code: 10, company_national_id: 11, mobile: 15 }[name]}
+                required />
+              <Image src={`/assets/figma-auth/${icon}`} alt="" aria-hidden width={24} height={24}
+                unoptimized className={name === "mobile" ? styles.mobileFieldIcon : styles.fieldIcon} />
+              {message && <span role="alert" className={styles.registrationError}>{message}</span>}
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
