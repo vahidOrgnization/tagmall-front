@@ -3,20 +3,19 @@
 import Image from "next/image";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { toEnglishNumber } from "@/lib/client/utils";
 import { extendTailwindMerge } from "tailwind-merge";
 import SellerFinancialReport from "./SellerFinancialReport";
 import SellerWallet from "./SellerWallet";
 import useSellerProfileSection from "../hooks/useSellerProfileSection";
 import SellerHeader from "./SellerHeader";
-import { Input } from "@/components/ui/input";
-import { Radio } from "@/components/ui/radio";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  FigmaDropdown,
+  FigmaBankDropdown,
+  FigmaPhoneFieldContainer,
+  FigmaRadio,
+  FigmaTextInput,
+} from "@/components/ui/figma-inputs";
 import {
   EditIcon,
   MessageTextIcon,
@@ -24,7 +23,6 @@ import {
   ReceiptIcon,
   ShareIcon,
   StoreIcon,
-  ChevronDownIcon,
   SupportIcon,
   CheckCircleIcon,
   CloseCircleIcon,
@@ -60,12 +58,12 @@ const PROFILE_SECTIONS = [
     title: "اطلاعات ارتباطی:",
     icon: SupportIcon,
     fields: [
-      { label: "شماره تماس", value: "۰۹۰۲۱۲۳۲۳۲۳", dropdown: true },
+      { label: "شماره تماس", value: "۰۹۰۲۱۲۳۲۳۲۳", contactType: "phone" },
       { label: "شماره تلفن ثابت", value: "۰۲۱۲۲۴۴۵۴", dropdown: true },
       {
         label: "پست الکترونیک شرکتی",
         value: "meymandiarman@gmail.com",
-        dropdown: true,
+        contactType: "email",
       },
       {
         label: "نشانی های اینترنتی ( ip )",
@@ -82,7 +80,7 @@ const PROFILE_SECTIONS = [
       { label: "نام بانک", value: "بانک ملی ایران", dropdown: true },
       { label: "شماره حساب بانکی", value: "۱۲۳۴۵۶۷۸۹۰" },
       { label: "شماره کارت", value: "۶۰۳۷۱۰۲۴۹۵۰۴۸۲۴" },
-      { label: "شماره شبا (IBAN)", value: "IR۹۵۰۱۷۰۰۰۰۰۰۰۳۴۰۵۶۲۰۹MDA" },
+      { label: "شماره شبا (IBAN)", value: "IR۹۵۰۱۷۰۰۰۰۰۰۰۳۴۰۵۶۲۰۹MDA", bankDropdown: true },
     ],
   },
 ];
@@ -142,11 +140,34 @@ function ProfileField({
   label,
   value,
   dropdown,
+  contactType,
+  bankDropdown,
   required = true,
   strong = false,
 }) {
   const [selectedValue, setSelectedValue] = useState(value);
   const fieldId = `seller-profile-${label}`;
+
+  if (contactType) {
+    return (
+      <FigmaPhoneFieldContainer
+        type={contactType}
+        label={label}
+        required={required}
+        size="medium"
+        className="w-full min-w-0"
+        triggerClassName="rounded-lg bg-surface-subtle px-3"
+        valueClassName="text-[14px] leading-[22px] text-text-disabled!"
+        modalClassName="theme-new"
+        onRequestCode={() => {
+          toast.error("ارسال کد تأیید در حال حاضر در دسترس نیست");
+          return false;
+        }}
+        defaultValue={value}
+        defaultOptions={[{ id: value, value }]}
+      />
+    );
+  }
 
   return (
     <div className="flex min-w-0 flex-col gap-2 text-small text-text-secondary">
@@ -154,55 +175,60 @@ function ProfileField({
         <label htmlFor={fieldId}>{label}</label>
         {required && <span className="text-error">*</span>}
       </span>
-      <span className="relative block">
-        {dropdown ? (
-          <DropdownMenu dir="rtl">
-            <DropdownMenuTrigger asChild>
-              <button
-                id={fieldId}
-                type="button"
-                aria-label={label}
-                className={`flex h-12 w-full items-center justify-between gap-3 rounded-lg border border-border-default bg-surface-subtle px-3 text-right text-small ${strong ? "text-text-primary" : "text-text-disabled"} focus-visible:border-primary focus-visible:outline-none`}
-              >
-                <span dir="auto" lang={/[A-Za-z0-9]/.test(value) ? "en" : "fa"}>
-                  {selectedValue}
-                </span>
-                <ChevronDownIcon
-                  size={18}
-                  className="shrink-0 text-text-muted"
-                />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              dir="rtl"
-              align="start"
-              className="theme-new border border-border-default bg-surface py-1 shadow-dropdown"
-            >
-              <DropdownMenuRadioGroup
-                value={selectedValue}
-                onValueChange={setSelectedValue}
-              >
-                <DropdownMenuRadioItem
-                  value={value}
-                  className="justify-start px-3 text-right text-small text-text-primary"
-                >
-                  {value}
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <div className="relative block">
+        {bankDropdown ? (
+          <FigmaBankDropdown
+            id={fieldId}
+            label={label}
+            size="medium"
+            className="w-full min-w-0"
+            triggerClassName="rounded-lg bg-surface-subtle px-3"
+            valueClassName="text-[14px] leading-[22px] text-text-disabled!"
+            defaultValue="current"
+            defaultAccounts={[{ id: "current", label: value }]}
+            onAddAccount={async (iban) => {
+              const normalized = toEnglishNumber(iban).replace(/[\s-]/g, "").toUpperCase();
+              if (!/^IR\d{24}$/.test(normalized)) {
+                toast.error("شماره شبا را به‌درستی وارد کنید");
+                return { success: false };
+              }
+              return { success: true, account: { id: normalized, label: normalized } };
+            }}
+          />
+        ) : dropdown ? (
+          <FigmaDropdown
+            id={fieldId}
+            aria-label={label}
+            size="medium"
+            className="w-full"
+            triggerClassName="h-12 rounded-lg bg-surface-subtle px-3 text-right text-[14px] leading-[22px] [font-weight:400] focus-visible:border-primary focus-visible:outline-none"
+            selectedLabelClassName={`text-[14px] leading-[22px] tracking-normal [font-weight:400] ${strong ? "text-text-primary!" : "text-text-disabled!"}`}
+            selectedLabelDir="auto"
+            selectedLabelLang={/[A-Za-z0-9]/.test(value) ? "en" : "fa"}
+            menuClassName="h-auto min-h-0 py-2"
+            optionClassName="h-8"
+            optionLabelClassName="text-[14px] leading-[22px] tracking-normal font-[YekanBakh] [font-weight:400] text-text-primary!"
+            optionLabelDir="auto"
+            optionLabelLang={/[A-Za-z0-9]/.test(value) ? "en" : "fa"}
+            value={selectedValue}
+            onChange={setSelectedValue}
+            options={[{ label: value, value }]}
+          />
         ) : (
-          <Input
+          <FigmaTextInput
             id={fieldId}
             aria-label={label}
             defaultValue={value}
-            variant={strong ? "sellerProfileStrong" : "sellerProfile"}
+            width="100%"
+            size="medium"
             dir="auto"
             lang={/[A-Za-z0-9]/.test(value) ? "en" : "fa"}
-            className="w-full text-right"
+            className="w-full"
+            controlClassName="h-12 rounded-lg bg-surface-subtle px-3 focus-within:border-primary"
+            inputClassName={`text-[14px] leading-[22px] text-right ${strong ? "text-text-primary!" : "text-text-disabled!"}`}
           />
         )}
-      </span>
+      </div>
     </div>
   );
 }
@@ -480,20 +506,26 @@ function SellerSettings() {
                     { value: true, label: "فعال" },
                     { value: false, label: "غیرفعال" },
                   ].map((option) => (
-                    <Radio
+                    <label
                       key={option.label}
-                      variant="segmented"
-                      name={`seller-${row.key}`}
-                      value={String(option.value)}
-                      label={option.label}
-                      checked={settings[row.key] === option.value}
-                      onChange={() =>
-                        setSettings((current) => ({
-                          ...current,
-                          [row.key]: option.value,
-                        }))
-                      }
-                    />
+                      className="relative flex h-8 w-[90px] shrink-0 cursor-pointer"
+                    >
+                      <FigmaRadio
+                        name={`seller-${row.key}`}
+                        value={String(option.value)}
+                        checked={settings[row.key] === option.value}
+                        onChange={() =>
+                          setSettings((current) => ({
+                            ...current,
+                            [row.key]: option.value,
+                          }))
+                        }
+                        className="peer sr-only"
+                      />
+                      <span className="flex size-full items-center justify-center rounded-md text-small text-text-muted transition-colors peer-checked:bg-primary peer-checked:text-text-on-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary motion-reduce:transition-none">
+                        {option.label}
+                      </span>
+                    </label>
                   ))}
                 </fieldset>
               </div>
