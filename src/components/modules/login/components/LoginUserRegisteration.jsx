@@ -1,14 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { UserIcon, BarcodeReadIcon, MobilePhoneIcon, ArrowLeftIcon } from "@/icons";
+import {
+  ArrowLeftIcon,
+  BarcodeReadIcon,
+  MobilePhoneIcon,
+  UserIcon,
+} from "@/icons";
+import { Checkbox } from "@/components/ui/checkbox";
+import ResponsiveModal from "@/components/ui/responsive-modal";
 import { isValidIranianNationalCode } from "@/lib/client/validations";
-import { registerUser } from "@/lib/server/actions/auth";
-import { saveToken, saveUser } from "@/lib/server/cookies";
 import { formatPhoneNumber, toEnglishNumber } from "@/lib/client/utils";
+import { getAuthErrorMessage, persistAuthSession } from "@/lib/client/auth";
+import { registerUser } from "@/lib/server/actions/auth";
 import usePublicStore from "@/app/store/publicStore";
 
 function LoginUserRegisteration({
@@ -20,6 +27,8 @@ function LoginUserRegisteration({
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [nationalCode, setNationalCode] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [errors, setErrors] = useState({
     fullName: "",
@@ -27,17 +36,31 @@ function LoginUserRegisteration({
     mobile: "",
     otp: "",
   });
+  const requestInFlight = useRef(false);
 
   const setUserInfo = usePublicStore((state) => state.setUserInfo);
   const setAccessToken = usePublicStore((state) => state.setAccessToken);
 
-  const parts = fullName.trim().split(/\s+/);
   const isFormValid =
     fullName.trim().length >= 3 &&
     nationalCode.length === 10 &&
-    isValidIranianNationalCode(nationalCode);
+    isValidIranianNationalCode(nationalCode) &&
+    acceptedTerms;
 
-  const handleConfirm = async () => {
+  const openTerms = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsTermsOpen(true);
+  };
+
+  const closeTerms = () => {
+    setIsTermsOpen(false);
+  };
+
+  const handleConfirm = async (event) => {
+    event?.preventDefault();
+    if (requestInFlight.current) return;
+
     const nameParts = fullName.trim().split(/\s+/);
     const firstName = nameParts[0] || "";
     const lastName = nameParts.slice(1).join(" ") || "";
@@ -64,6 +87,11 @@ function LoginUserRegisteration({
       hasError = true;
     }
 
+    if (!acceptedTerms) {
+      toast.error("پذیرش شرایط استفاده از خدمات الزامی است.");
+      hasError = true;
+    }
+
     if (hasError) {
       setErrors(newErrors);
       return;
@@ -74,51 +102,67 @@ function LoginUserRegisteration({
       otp: enteredOtp,
       name: firstName,
       family: lastName,
-      national_code: nationalCode,
+      national_code: toEnglishNumber(nationalCode).replace(/[^0-9]/g, ""),
     };
 
+    requestInFlight.current = true;
     setIsConfirming(true);
 
-    const { registerRes, registerErr } = await registerUser(payload);
+    try {
+      const { registerRes, registerErr } = await registerUser(payload);
 
-    if (registerRes) {
-      toast.success("ثبت‌نام با موفقیت انجام شد");
-      setAccessToken(registerRes?.data?.token);
-      setUserInfo(registerRes?.data?.user);
-      await saveToken(registerRes?.data?.token);
-      await saveUser(JSON.stringify(registerRes?.data?.user));
-      if (onSuccess) onSuccess();
-      router.push("/");
-    } else if (registerErr) {
-      const apiErrors = registerErr?.response?.data?.errors;
-
-      if (apiErrors) {
-        const mappedErrors = { ...newErrors };
-        if (apiErrors.name || apiErrors.family) {
-          mappedErrors.fullName = apiErrors.name?.[0] || apiErrors.family?.[0];
-        }
-        if (apiErrors.national_code) {
-          mappedErrors.nationalCode = apiErrors.national_code[0];
-        }
-        setErrors(mappedErrors);
-
-        if (apiErrors.mobile) {
-          toast.error(apiErrors.mobile[0]);
-        }
-        if (apiErrors.otp) {
-          toast.error(apiErrors.otp[0]);
-        }
-      } else {
-        toast.error("خطا در برقراری ارتباط با سرور");
+      if (registerRes?.data) {
+        await persistAuthSession({
+          authData: registerRes.data,
+          setAccessToken,
+          setUserInfo,
+        });
+        toast.success("ثبت‌نام با موفقیت انجام شد");
+        onSuccess?.();
+        router.push("/");
+        return;
       }
-    }
 
-    setIsConfirming(false);
+      const apiErrors = registerErr?.response?.data?.errors;
+      if (apiErrors && Object.keys(apiErrors).length > 0) {
+        const fieldMap = {
+          name: "fullName",
+          family: "fullName",
+          national_code: "nationalCode",
+          mobile: "mobile",
+          otp: "otp",
+        };
+        const mappedErrors = { ...newErrors };
+        let firstApiMessage;
+
+        Object.entries(apiErrors).forEach(([key, value]) => {
+          const stateKey = fieldMap[key];
+          const message = Array.isArray(value) ? value[0] : value;
+          if (typeof message === "string" && !firstApiMessage) firstApiMessage = message;
+          if (stateKey && typeof message === "string") {
+            mappedErrors[stateKey] = message;
+          }
+        });
+
+        setErrors(mappedErrors);
+        if (firstApiMessage) toast.error(firstApiMessage);
+      } else {
+        toast.error(getAuthErrorMessage(registerErr, "ثبت‌نام انجام نشد. دوباره تلاش کنید."));
+      }
+    } catch (requestError) {
+      toast.error(getAuthErrorMessage(requestError, "ثبت‌نام انجام نشد. دوباره تلاش کنید."));
+    } finally {
+      requestInFlight.current = false;
+      setIsConfirming(false);
+    }
   };
 
   return (
-    <div className="flex flex-col space-y-6 select-none">
-      {/* 1. Header (Logo + Back Arrow button) */}
+  <>
+    <form
+      className="flex flex-col space-y-6 select-none"
+      onSubmit={handleConfirm}
+    >
       <div className="relative flex justify-center items-center w-full">
         <Image
           src="/assets/images/logo/tagmall-logo-horizontal.svg"
@@ -132,7 +176,8 @@ function LoginUserRegisteration({
           <button
             type="button"
             onClick={handlePreviousStep}
-            className="absolute left-0 top-1/2 -translate-y-1/2 p-1 text-primary hover:text-primary-700 transition-colors cursor-pointer"
+            disabled={isConfirming}
+            className="absolute left-0 top-1/2 -translate-y-1/2 p-1 text-primary hover:text-primary-700 transition-colors cursor-pointer disabled:opacity-50"
             aria-label="بازگشت به مرحله قبل"
           >
             <ArrowLeftIcon size={24} className="text-primary" />
@@ -140,19 +185,14 @@ function LoginUserRegisteration({
         )}
       </div>
 
-      {/* 2. Header (Title + Description) */}
       <div className="flex flex-col gap-2 text-right">
-        <h2 className="text-h4 font-semibold text-primary">
-          ایجاد حساب کاربری
-        </h2>
+        <h2 className="text-h4 font-semibold text-primary">ایجاد حساب کاربری</h2>
         <p className="text-small text-text-muted font-normal leading-relaxed">
           اطلاعات خود را جهت ثبت‌نام وارد کنید.
         </p>
       </div>
 
-      {/* 3. Form (Full Name, National Code, Mobile) */}
       <div className="flex flex-col gap-4">
-        {/* Full Name */}
         <div className="flex flex-col gap-1">
           <div
             className={`w-full h-14 rounded-2xl border bg-surface flex items-center px-4 transition-all duration-200 ${
@@ -177,13 +217,10 @@ function LoginUserRegisteration({
             />
           </div>
           {errors.fullName && (
-            <span className="text-caption text-error px-1 text-right">
-              {errors.fullName}
-            </span>
+            <span className="text-caption text-error px-1 text-right">{errors.fullName}</span>
           )}
         </div>
 
-        {/* National Code / شناسه ملی */}
         <div className="flex flex-col gap-1">
           <div
             className={`w-full h-14 rounded-2xl border bg-surface flex items-center px-4 transition-all duration-200 ${
@@ -212,13 +249,10 @@ function LoginUserRegisteration({
             />
           </div>
           {errors.nationalCode && (
-            <span className="text-caption text-error px-1 text-right">
-              {errors.nationalCode}
-            </span>
+            <span className="text-caption text-error px-1 text-right">{errors.nationalCode}</span>
           )}
         </div>
 
-        {/* Mobile Number (Read-only / verified from step 1) */}
         <div className="flex flex-col gap-1">
           <div className="w-full h-14 rounded-2xl border border-border-default bg-surface/70 opacity-80 flex items-center px-4 cursor-not-allowed">
             <MobilePhoneIcon size={24} className="text-primary shrink-0" />
@@ -234,10 +268,29 @@ function LoginUserRegisteration({
         </div>
       </div>
 
-      {/* 4. Action Button (ثبت نام) */}
+      <Checkbox
+        checked={acceptedTerms}
+        onChange={setAcceptedTerms}
+        label={
+          <>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={openTerms}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") openTerms(e);
+              }}
+              className="text-primary cursor-pointer"
+            >
+              شرایط
+            </span>{" "}
+            بهره‌مندی از خدمات تگ مال را می‌پذیرم
+          </>
+        }
+      />
+
       <button
-        type="button"
-        onClick={handleConfirm}
+        type="submit"
         disabled={isConfirming || !isFormValid}
         className={`w-full h-12.5 rounded-2xl text-h5 font-semibold transition-all duration-200 flex items-center justify-center ${
           !isConfirming && isFormValid
@@ -247,7 +300,30 @@ function LoginUserRegisteration({
       >
         {isConfirming ? "در حال ثبت نام..." : "ثبت نام"}
       </button>
-    </div>
+    </form>
+
+    <ResponsiveModal
+      isOpen={isTermsOpen}
+      onClose={closeTerms}
+      title="شرایط و قوانین تگ مال"
+      nested
+      isHintBox
+    >
+      <div className="text-sm text-gray-600 leading-8 text-justify space-y-3">
+        <p>
+          استفاده از خدمات تگ مال به معنای پذیرش شرایط و قوانین زیر است. این متن فعلاً برای تست
+          نمایش داده می‌شود و نسخه نهایی قوانین به‌زودی جایگزین آن خواهد شد.
+        </p>
+        <p>
+          کاربران موظف‌اند اطلاعات صحیح وارد کنند و از هرگونه سوءاستفاده از سرویس خودداری نمایند.
+          تگ مال حق به‌روزرسانی این شرایط را برای خود محفوظ می‌دارد.
+        </p>
+        <p>
+          در صورت نیاز به پشتیبانی، می‌توانید از بخش پشتیبانی داخل اپلیکیشن با ما در ارتباط باشید.
+        </p>
+      </div>
+    </ResponsiveModal>
+  </>
   );
 }
 

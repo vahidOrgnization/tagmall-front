@@ -1,33 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import LoginEnterPhone from "./LoginEnterPhone";
 import LoginOtp from "./LoginOtp";
 import LoginUserRegisteration from "./LoginUserRegisteration";
 
-function AuthCard({ onSuccess }) {
+function AuthCard({ onSuccess, onStepChange }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [enteredOtp, setEnteredOtp] = useState("");
   const [otpExpireTime, setOtpExpireTime] = useState(0);
   const [isNewUser, setIsNewUser] = useState(null);
-  const [receivedOtp, setReceivedOtp] = useState("");
 
-  const handleNextStep = () => {
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
+  const handleNextStep = useCallback(() => {
+    setCurrentStep((step) => (step < 3 ? step + 1 : step));
+  }, []);
 
-  const handlePreviousStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
+  const handlePreviousStep = useCallback(() => {
+    setCurrentStep((step) => (step > 1 ? step - 1 : step));
+  }, []);
 
-  const handleSuccess = () => {
-    if (onSuccess) onSuccess();
-  };
+  const handleSuccess = useCallback(() => {
+    onSuccess?.();
+  }, [onSuccess]);
+
+  useEffect(() => {
+    onStepChange?.(currentStep, handlePreviousStep);
+  }, [currentStep, handlePreviousStep, onStepChange]);
 
   if (currentStep === 1) {
     return (
@@ -37,7 +36,6 @@ function AuthCard({ onSuccess }) {
         setPhoneNumber={setPhoneNumber}
         setOtpExpireTime={setOtpExpireTime}
         setIsNewUser={setIsNewUser}
-        setReceivedOtp={setReceivedOtp}
       />
     );
   }
@@ -51,7 +49,6 @@ function AuthCard({ onSuccess }) {
         setEnteredOtp={setEnteredOtp}
         otpExpireTime={otpExpireTime}
         isNewUser={isNewUser}
-        receivedOtp={receivedOtp}
         onSuccess={handleSuccess}
       />
     );
@@ -68,4 +65,3 @@ function AuthCard({ onSuccess }) {
 }
 
 export default AuthCard;
-

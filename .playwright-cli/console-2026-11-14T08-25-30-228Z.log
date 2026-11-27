@@ -1,0 +1,70 @@
+[     494ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[     724ms] [LOG] [HMR] connected @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[    1098ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[    1222ms] [LOG] [Fast Refresh] done in 225ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   28599ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   28662ms] [LOG] [Fast Refresh] done in 170ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   49963ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   50026ms] [LOG] [Fast Refresh] done in 165ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   94989ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   95609ms] [WARNING] [Fast Refresh] performing full reload
+
+Fast Refresh will perform a full reload when you edit a file that's imported by modules outside of the React rendering tree.
+You might have a file which exports a React component but also exports a value that is imported by a non-React component file.
+Consider migrating the non-React component export to a separate file and importing it into both files.
+
+It is also possible the parent component of the component you edited is a class component, which disables Fast Refresh.
+Fast Refresh requires at least one parent function component in your React tree. @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   95632ms] [LOG] [Fast Refresh] done in 725ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   95745ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   96351ms] [LOG] [Fast Refresh] done in 710ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   96670ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[   96719ms] [LOG] [HMR] connected @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  113414ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  113835ms] [WARNING] [Fast Refresh] performing full reload
+
+Fast Refresh will perform a full reload when you edit a file that's imported by modules outside of the React rendering tree.
+You might have a file which exports a React component but also exports a value that is imported by a non-React component file.
+Consider migrating the non-React component export to a separate file and importing it into both files.
+
+It is also possible the parent component of the component you edited is a class component, which disables Fast Refresh.
+Fast Refresh requires at least one parent function component in your React tree. @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  113855ms] [LOG] [Fast Refresh] done in 524ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  113962ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  114256ms] [LOG] [Fast Refresh] done in 395ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  114417ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  114452ms] [LOG] [HMR] connected @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  128530ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  128776ms] [WARNING] [Fast Refresh] performing full reload
+
+Fast Refresh will perform a full reload when you edit a file that's imported by modules outside of the React rendering tree.
+You might have a file which exports a React component but also exports a value that is imported by a non-React component file.
+Consider migrating the non-React component export to a separate file and importing it into both files.
+
+It is also possible the parent component of the component you edited is a class component, which disables Fast Refresh.
+Fast Refresh requires at least one parent function component in your React tree. @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  128783ms] [LOG] [Fast Refresh] done in 351ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  128906ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  129163ms] [LOG] [Fast Refresh] done in 364ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  129334ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  129373ms] [LOG] [HMR] connected @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  205996ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  206060ms] [LOG] [Fast Refresh] done in 170ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  225865ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  225930ms] [LOG] [Fast Refresh] done in 173ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  269589ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  269933ms] [WARNING] [Fast Refresh] performing full reload
+
+Fast Refresh will perform a full reload when you edit a file that's imported by modules outside of the React rendering tree.
+You might have a file which exports a React component but also exports a value that is imported by a non-React component file.
+Consider migrating the non-React component export to a separate file and importing it into both files.
+
+It is also possible the parent component of the component you edited is a class component, which disables Fast Refresh.
+Fast Refresh requires at least one parent function component in your React tree. @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  269950ms] [LOG] [Fast Refresh] done in 445ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  270074ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  270385ms] [LOG] [Fast Refresh] done in 423ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  270517ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[  270565ms] [LOG] [HMR] connected @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[ 2959443ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
+[ 2959554ms] [LOG] [Fast Refresh] done in 219ms @ http://127.0.0.1:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2298
