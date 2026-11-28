@@ -3,11 +3,13 @@
 import { cookies } from "next/headers";
 import http from "@/app/api/axiosInstance";
 
+// Session cookie identifiers and in-flight refresh deduplication map
 const ACCESS_COOKIE = "tagmall_seller_access";
 const REFRESH_COOKIE = "tagmall_seller_refresh";
 const REGISTRATION_COOKIE = "tagmall_seller_registration";
 const refreshes = new Map();
 
+// Check whether any seller session cookie is present
 export async function hasSellerSession() {
   try {
     const cookieStore = await cookies();
@@ -28,14 +30,19 @@ function writeCookie(cookieStore, name, value, maxAge) {
   });
 }
 
+// Standardized fallback responses and dev-only error logging
 const unavailable = { ok: false, message: "ارتباط با سامانهٔ فروشندگان برقرار نشد." };
 const invalid = { ok: false, status: 401, message: "لطفاً دوباره وارد شوید." };
 
-function handleUnexpectedSellerAuthError(action, error) {
+function logSellerAuthError(action, details) {
   if (process.env.NODE_ENV === "development") {
-    // Avoid logging request payloads or authentication headers.
-    console.error("[seller-auth] " + action, { name: error?.name || "Error" });
+    // Avoid logging request payloads, mobile numbers, OTPs, or authentication headers.
+    console.error("[seller-auth] " + action, details);
   }
+}
+
+function handleUnexpectedSellerAuthError(action, error) {
+  logSellerAuthError(action, { name: error?.name || "Error" });
   return unavailable;
 }
 
@@ -55,6 +62,7 @@ function serializeSellerAuthError(error) {
   };
 }
 
+// Core HTTP client for seller authentication endpoints
 async function requestSellerAuth({ url, method, data, accessToken, deviceId }) {
   const baseURL =
     process.env.SELLER_API_BASE_URL?.replace(/\/+$/, "") ||
@@ -85,7 +93,14 @@ async function requestSellerAuth({ url, method, data, accessToken, deviceId }) {
     if (responseData?.success !== true) return unavailable;
     return { ok: true, data: responseData.data };
   } catch (err) {
-    return serializeSellerAuthError(err);
+    const serialized = serializeSellerAuthError(err);
+    logSellerAuthError(`${method} ${url}`, {
+      status: serialized.status,
+      code: serialized.code,
+      errorKeys: serialized.errors ? Object.keys(serialized.errors) : undefined,
+      name: err?.name,
+    });
+    return serialized;
   }
 }
 
@@ -108,13 +123,25 @@ function publicChallenge(result) {
   };
 }
 
-export async function startSellerOtp({ seller_type, mobile, company_national_id, deviceId }) {
+// OTP request, resend, and verification actions
+export async function startSellerOtp({
+  seller_type,
+  mobile,
+  company_national_id,
+  captcha_token,
+  deviceId,
+}) {
   try {
     const result = publicChallenge(
       await requestSellerAuth({
         url: "/auth/otp/request",
         method: "POST",
-        data: { seller_type, mobile, ...(seller_type === "LEGAL" && { company_national_id }) },
+        data: {
+          seller_type,
+          mobile,
+          ...(seller_type === "LEGAL" && { company_national_id }),
+          ...(captcha_token !== undefined && { captcha_token }),
+        },
         deviceId,
       }),
     );
@@ -128,13 +155,16 @@ export async function startSellerOtp({ seller_type, mobile, company_national_id,
   }
 }
 
-export async function resendSellerOtp({ challenge_id, deviceId }) {
+export async function resendSellerOtp({ challenge_id, captcha_token, deviceId }) {
   try {
     return publicChallenge(
       await requestSellerAuth({
         url: "/auth/otp/resend",
         method: "POST",
-        data: { challenge_id },
+        data: {
+          challenge_id,
+          ...(captcha_token !== undefined && { captcha_token }),
+        },
         deviceId,
       }),
     );
@@ -159,12 +189,13 @@ function saveSession(cookieStore, data) {
   return true;
 }
 
-export async function verifySellerOtp({ challenge_id, code }) {
+export async function verifySellerOtp({ challenge_id, code, deviceId }) {
   try {
     const result = await requestSellerAuth({
       url: "/auth/otp/verify",
       method: "POST",
       data: { challenge_id, code },
+      deviceId,
     });
     if (!result.ok) return result;
     const data = result.data;
@@ -188,11 +219,19 @@ export async function verifySellerOtp({ challenge_id, code }) {
   }
 }
 
+// Registration action for individual and legal sellers
 export async function registerSeller(type, fields) {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get(REGISTRATION_COOKIE)?.value;
-    if (!token) return { ...invalid, code: "REGISTRATION_TOKEN_INVALID" };
+    if (!token) {
+      return {
+        ok: false,
+        status: 403,
+        code: "REGISTRATION_TOKEN_INVALID",
+        message: invalid.message,
+      };
+    }
     if (!["individual", "legal"].includes(type)) return unavailable;
     const result = await requestSellerAuth({
       url: "/auth/registrations/" + type,
@@ -239,7 +278,10 @@ async function withSession(operation) {
     if (result.status !== 401) return result;
   }
   const token = cookieStore.get(REFRESH_COOKIE)?.value;
-  if (!token) return invalid;
+  if (!token) {
+    clearSession(cookieStore);
+    return invalid;
+  }
   const result = await refreshSession(token);
   if (!result.ok) {
     if (result.status === 401 || result.status === 403) clearSession(cookieStore);

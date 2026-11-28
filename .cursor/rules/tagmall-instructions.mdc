@@ -168,15 +168,15 @@ async function exampleApi(token, data) {
         Authorization: `Bearer ${token}`,
       },
     });
-    return {res: response.data};
+    return {{exampleName}.res: response.data};
   } catch (error) {
     console.log(error)
-    return {err: error || error.response}
+    return {{exampleName}err: error || error.response}
   }
   setIsLoading(false);
 }
 ```
-
+Follow this instruction for every function which sends request to backend data all the functions must follow this structure 
 ---
 
 ## 🪣 مدیریت State (STATE MANAGEMENT)
